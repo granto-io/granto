@@ -1,60 +1,73 @@
 # Public API (Granto Core)
 
-Источник правды для публичной поверхности — **RFC / стандарты**, не собственная OpenAPI-спека и не codegen.
+The public surface is defined by **RFCs / standards**, not by a custom OpenAPI spec or codegen.
 
-В этой папке **нет** `oapi-codegen` и нет «нашего» контракта, который можно произвольно менять. Менять поведение endpoint’ов можно только в рамках поддержки стандарта (и явного решения владельца о subset’е).
+This directory does **not** use `oapi-codegen`. Endpoint behaviour follows the relevant specifications (and the supported subset documented below). Product admin operations are not part of this surface — see `../admin/`.
 
-Реализация HTTP-адаптеров — в `internal/` (например `internal/transport/public`), не здесь.
+HTTP adapters live in `../../internal/transport/public/`.
 
-## Принцип
+## Scope
 
-Public API модуля `core` содержит **только** то, что описано в релевантных спецификациях:
+Public API of `core` exposes only what belongs to:
 
 - OAuth 2.0
 - OpenID Connect
-- GNAP
+- GNAP ([RFC 9635](https://www.rfc-editor.org/rfc/rfc9635.html))
 
-Плюс связанные well-known / discovery / JWKS, необходимые для этих протоколов. Продуктовые admin-операции сюда не входят — см. `../admin/`.
+plus discovery / JWKS needed by those protocols.
 
 ## Codegen
 
-**Не используем** OpenAPI + `oapi-codegen` для public. Привычный contract-first codegen оставлен для **admin** (`../admin/` → proto → `../../../gen/admin/`).
+OpenAPI + `oapi-codegen` is **not** used for public. Contract-first codegen is for **admin** (`../admin/` → proto → `../../../gen/admin/`). Documentation-only OpenAPI for public may appear later without generating handlers.
 
-При необходимости позже можно добавить documentation-only материалы — без обязательства генерировать handlers.
+## Endpoints
 
-## Целевой список endpoint’ов (планируемый subset)
+OAuth/OIDC paths follow common AS practice. GNAP paths are **Granto’s concrete URIs** for the abstract endpoints in RFC 9635 (the RFC does not mandate path names).
 
-Пути и набор будут уточняться по мере реализации. Ориентир (как в типичном AS и в `granto_old`):
+### Discovery / keys (OIDC)
 
-### Discovery / keys
-
-| Method | Path | Спека |
-|--------|------|--------|
+| Method | Path | Spec |
+|--------|------|------|
 | `GET` | `/.well-known/openid-configuration` | OpenID Connect Discovery |
-| `GET` | `/.well-known/jwks.json` | JWK Set (OIDC / OAuth) |
+| `GET` | `/.well-known/jwks.json` | JWK Set |
 
 ### OAuth 2.0
 
-| Method | Path | Спека (ориентир) |
-|--------|------|------------------|
-| `GET` | `/oauth2/auth` | RFC 6749 Authorization Endpoint (часто + PKCE / OIDC) |
+| Method | Path | Spec |
+|--------|------|------|
+| `GET` | `/oauth2/auth` | RFC 6749 Authorization Endpoint (often + PKCE / OIDC) |
 | `POST` | `/oauth2/token` | RFC 6749 Token Endpoint |
 | `POST` | `/oauth2/revoke` | RFC 7009 Token Revocation |
 | `POST` | `/oauth2/introspect` | RFC 7662 Token Introspection |
 
 ### OpenID Connect
 
-| Method | Path | Спека (ориентир) |
-|--------|------|------------------|
-| `GET` / `POST` | `/userinfo` | OIDC Core — UserInfo Endpoint |
-| `GET` | `/oauth2/logout` | RP-Initiated Logout (OIDC) |
+| Method | Path | Spec |
+|--------|------|------|
+| `GET` / `POST` | `/userinfo` | OIDC Core — UserInfo |
+| `GET` | `/oauth2/logout` | RP-Initiated Logout |
 
-### GNAP
+### GNAP ([RFC 9635](https://www.rfc-editor.org/rfc/rfc9635.html))
 
-Endpoint’ы GNAP (grant endpoint и связанные) — **будут добавлены** в этот список при реализации, строго по спецификации GNAP. Пока не зафиксированы.
+| Method | Path | Role in RFC |
+|--------|------|-------------|
+| `POST` | `/gnap` | Grant endpoint (§2) |
+| `OPTIONS` | `/gnap` | AS discovery (§9) |
+| `POST` | `/gnap/continue` | Continuation API — stable URI (§5.1 / §5.2) |
+| `PATCH` | `/gnap/continue` | Modify ongoing grant (§5.3) |
+| `DELETE` | `/gnap/continue` | Cancel / finalize grant (§5.4) |
+| `POST` / `PATCH` / `DELETE` | `/gnap/continue/{continueID}` | Continuation API — unique-per-grant URI (§5) |
+| `POST` | `/gnap/token/{tokenID}` | Token management — rotate (§6.1) |
+| `DELETE` | `/gnap/token/{tokenID}` | Token management — revoke (§6.2) |
+| `GET` | `/gnap/interact/{interactID}` | AS-hosted redirect interaction (§4.1.1); may later integrate with the consent module |
+| `GET` | `/gnap/device` | Static user_code entry URI (§4.1.2) |
 
-## Что сюда не кладём
+GNAP errors follow §3.6 (`error` as `{code, description}` or a string code), **not** OAuth’s `error` / `error_description`. Helpers in transport: `writeGNAPError` / `writeOAuthError`.
 
-- `*.proto`, сгенерённый Go, handlers, domain, storage
-- Собственные «удобные» JSON API вне RFC
-- Admin CRUD (clients, sessions admin, trusted issuance, …) — это `api/admin`
+Continuation and token-management URIs in live AS responses are absolute URLs matching these templates; clients call them with the continuation / management access token and key proof (§7).
+
+## Out of scope here
+
+- `*.proto`, generated Go, handlers, domain, storage
+- Custom JSON APIs outside the RFCs
+- Admin CRUD — see `api/admin`

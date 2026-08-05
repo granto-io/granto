@@ -1,11 +1,9 @@
 # Admin API contracts (proto)
 
-Источник правды для **Admin API** модуля `core`: Protocol Buffers + gRPC.
+Source of truth for the **Admin API** of Granto Core: Protocol Buffers + gRPC.
 
-- Сюда кладём `*.proto` (версия `v1/`).
-- Сгенерённый Go (gRPC, messages, gRPC-Gateway) — в `../../../gen/admin/v1/`.
-- Реализация сервисов — в `internal/` (не в этой папке).
+- Place `*.proto` files under `v1/`.
+- Generated Go (messages, gRPC, gRPC-Gateway) goes to `../../../gen/admin/v1/`.
+- Service implementations live under `internal/`, not here.
 
-Сейчас proto ещё не добавлены — только каркас каталога.
-
-См. корневые `DECISIONS.md` (D-006, D-007).
+Proto definitions are not added yet — directory scaffold only.
