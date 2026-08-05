@@ -1,22 +1,28 @@
-# granto
+# Granto
 
-Активная кодовая база (монорепо модулей).
+Modular authorization: OAuth 2.0, OpenID Connect, and GNAP.
 
-## Модули
+## Modules
 
-- `core/` — сессии, OAuth2/OIDC, GNAP
-- `consent/` — engine + auth plugins (позже)
-- `rbac/` — позже
+| Module | Role |
+|--------|------|
+| `core/` | Sessions, OAuth2/OIDC, GNAP (authorization server kernel) |
+| `consent/` | Login / consent (engine + auth plugins) — planned |
+| `rbac/` | Authorization policies — planned |
 
-## `core` — контракты
+Each module is intended to be installable (and replaceable) on its own.
+
+## `core` layout
 
 ```
 core/
-  api/admin/v1/   # proto (пока пусто)
-  api/public/     # RFC-only docs (README)
-  gen/admin/v1/   # сгенерённый Go из proto
-  cmd/            # entrypoint
-  internal/       # реализация (ещё не разложена)
+  api/admin/v1/               # Admin API protobuf sources
+  api/public/                 # Public API notes (RFC surface)
+  gen/admin/v1/               # Generated gRPC / gateway code
+  cmd/                        # Process entrypoint
+  internal/transport/public/  # Public HTTP adapters (chi)
 ```
 
-См. корневые `CONTEXT.md`, `DECISIONS.md` (D-006, D-007), `STEPS.md`.
+Public HTTP stack: **chi**, **slog**, OpenTelemetry (`otelhttp` at the server boundary). Admin API: protobuf → gRPC + gRPC-Gateway.
+
+See `core/api/public/README.md` and `core/api/admin/README.md` for API surfaces.
