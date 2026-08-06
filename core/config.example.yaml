@@ -1,0 +1,63 @@
+# Example configuration for granto-core.
+# Copy to config.yaml and adjust. Secrets are better set via GRANTO_* env vars.
+#
+# Load order: built-in defaults → this file → environment overrides.
+
+server:
+  public_addr: ":4444"
+  admin_rest_addr: ":4445"
+  admin_grpc_addr: ":4446"
+  metrics_addr: ":4447"
+  shutdown_timeout: 30s
+
+postgres:
+  # Prefer GRANTO_POSTGRES_DSN in production.
+  dsn: "postgres://granto:secret@localhost:5432/granto?sslmode=disable"
+  max_open: 25
+  max_idle: 5
+  conn_max_lifetime: 5m
+  migrate_on_start: true
+
+redis:
+  # Prefer GRANTO_REDIS_ADDR / GRANTO_REDIS_PASSWORD in production.
+  addr: "localhost:6379"
+  pool_size: 10
+
+token:
+  # Prefer GRANTO_ISSUER / GRANTO_MASTER_KEY in production.
+  issuer: "https://auth.example.com"
+  default_algorithm: "RS256"
+  access_token_ttl: 1h
+  refresh_token_ttl: 720h
+  id_token_ttl: 1h
+  # master_key: "at-least-32-characters-long!!!!"
+
+session:
+  default_ttl: 24h
+  max_ttl: 720h
+
+oauth2:
+  # Prefer GRANTO_LOGIN_URL in production.
+  login_url: "https://app.example.com/login"
+  # consent_url: ""
+  logout_url: "https://app.example.com"
+
+admin:
+  # Prefer GRANTO_ADMIN_TOKEN in production.
+  token: "change-me-in-production"
+
+cors:
+  enabled: false
+  # allowed_origins: ["https://app.example.com"]
+  allowed_methods: ["GET", "POST", "OPTIONS"]
+  allowed_headers: ["Authorization", "Content-Type"]
+  max_age: 300
+
+log:
+  level: info
+  format: json
+
+telemetry:
+  enabled: false
+  service_name: granto-core
+  sample_rate: 1.0

@@ -42,10 +42,15 @@ services:
       - "4445:4445"
       - "4446:4446"
     environment:
-      POSTGRES_DSN: postgres://granto:secret@postgres:5432/granto?sslmode=disable
-      REDIS_ADDR: redis:6379
-      PUBLIC_HTTP_ADDR: ":4444"
-      LOG_LEVEL: debug
+      GRANTO_POSTGRES_DSN: postgres://granto:secret@postgres:5432/granto?sslmode=disable
+      GRANTO_REDIS_ADDR: redis:6379
+      GRANTO_PUBLIC_ADDR: ":4444"
+      GRANTO_LOG_LEVEL: debug
+      # Required at startup once config.Load is wired (dev placeholders):
+      GRANTO_ISSUER: http://localhost:4444
+      GRANTO_MASTER_KEY: "dev-only-master-key-32chars!!"
+      GRANTO_ADMIN_TOKEN: change-me
+      GRANTO_LOGIN_URL: http://localhost:3000/login
     depends_on:
       postgres:
         condition: service_healthy

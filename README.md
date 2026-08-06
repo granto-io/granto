@@ -23,6 +23,11 @@ core/
   cmd/granto-core/            # Process entrypoint
   internal/di/                # Dependency graph (Google Wire sets)
   internal/app/               # App type / process lifecycle (no Wire)
+  internal/config/            # defaults → YAML → GRANTO_* env
+  internal/domain/            # Domain types
+  internal/repository/        # Storage interfaces
+  internal/repository/postgres/
+  internal/repository/redis/
   internal/transport/public/  # Public HTTP adapters (chi)
 ```
 
@@ -30,12 +35,17 @@ Public HTTP stack: **chi**, **slog**, OpenTelemetry (`otelhttp` at the server bo
 
 Internal wiring uses **Google Wire** in `internal/di`. Third-party consent plugins (later) will use a Host API, not Wire.
 
-### Regenerate Wire
+### Regenerate code
+
+From `core/` (or repo root via the root Makefile):
 
 ```bash
-cd core
-go generate ./internal/di
+make generate          # all generators
+make generate-wire     # Google Wire only
+make generate-proto    # admin proto (stub until buf is wired)
 ```
+
+Equivalent low-level Wire hook: `go generate ./internal/di`.
 
 See `core/internal/di/README.md`, `core/api/public/README.md`, and `core/api/admin/README.md`.
 
@@ -47,4 +57,8 @@ From the `granto/` directory:
 docker compose up --build
 ```
 
-Services: **postgres** (`localhost:5432`), **redis** (`localhost:6379`), **core** (Air hot-reload; public HTTP `:4444` when the server listens). Env defaults: `POSTGRES_DSN`, `REDIS_ADDR`, `PUBLIC_HTTP_ADDR`.
+Services: **postgres** (`localhost:5432`), **redis** (`localhost:6379`), **core** (Air hot-reload; public HTTP `:4444` when the server listens). Env: `GRANTO_*` (see `core/config.example.yaml` / `internal/config`).
+
+### Configuration
+
+Load order: **built-in defaults → YAML file → `GRANTO_*` env**. Example file: `core/config.example.yaml`. Package: `internal/config` (`config.Load(path)`).

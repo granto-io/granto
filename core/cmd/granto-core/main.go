@@ -16,5 +16,6 @@ func main() {
 
 	a.Logger.Info("granto-core initialized",
 		"public_handler", a.Public != nil,
+		"clients_repo", a.Clients != nil,
 	)
 }

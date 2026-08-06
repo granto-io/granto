@@ -10,5 +10,6 @@ import (
 var AppSet = wire.NewSet(
 	LoggerSet,
 	PublicHTTPSet,
+	PostgresSet,
 	app.NewApp,
 )
