@@ -11,6 +11,7 @@ This package only defines providers and injectors. Process lifecycle
 |------|----------|
 | `logger.go` | Process logger (`slog`) |
 | `public_http.go` | Public HTTP handler (OAuth2 / OIDC / GNAP) |
+| `postgres.go` | Config, `*postgres.DB` (migrate + pool), `ClientRepository` |
 | `app.go` | Composed `AppSet` |
 | `wire.go` | `InitializeApp` injector (wireinject) |
 

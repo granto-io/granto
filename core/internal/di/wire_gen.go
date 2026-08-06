@@ -8,6 +8,7 @@ package di
 
 import (
 	"github.com/granto-io/granto/core/internal/app"
+	"github.com/granto-io/granto/core/internal/repository/postgres"
 	"github.com/granto-io/granto/core/internal/transport/public"
 )
 
@@ -18,6 +19,15 @@ func InitializeApp() (*app.App, error) {
 	logger := provideLogger()
 	handler := public.NewHandler(logger)
 	httpHandler := providePublicRouter(handler, logger)
-	appApp := app.NewApp(logger, httpHandler)
+	config, err := provideConfig()
+	if err != nil {
+		return nil, err
+	}
+	db, err := provideDB(config)
+	if err != nil {
+		return nil, err
+	}
+	clientRepository := postgres.NewClientRepository(db)
+	appApp := app.NewApp(logger, httpHandler, clientRepository)
 	return appApp, nil
 }
