@@ -20,7 +20,7 @@ core/
   api/public/                 # Public API notes (RFC surface)
   migrations/                 # Postgres SQL migrations (golang-migrate)
   gen/admin/v1/               # Generated gRPC / gateway code
-  cmd/granto-core/            # Process entrypoint
+  cmd/                        # Process entrypoint (main.go)
   internal/di/                # Dependency graph (Google Wire sets)
   internal/app/               # App type / process lifecycle (no Wire)
   internal/config/            # defaults → YAML → GRANTO_* env
