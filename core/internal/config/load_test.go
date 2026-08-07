@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,7 +29,7 @@ admin:
   token: yaml-admin-token
 `
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("write config fixture: %v", err)
 	}
 
 	t.Setenv("GRANTO_POSTGRES_DSN", "postgres://from-env/db")
@@ -36,51 +37,61 @@ admin:
 
 	cfg, err := config.Load(path)
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("Load(%q) unexpected error: %v", path, err)
 	}
 
 	if cfg.Server.PublicAddr != ":9999" {
-		t.Fatalf("public_addr: got %q", cfg.Server.PublicAddr)
+		t.Fatalf("Server.PublicAddr = %q, want %q (from YAML)", cfg.Server.PublicAddr, ":9999")
 	}
 	if cfg.Server.AdminRESTAddr != ":4445" {
-		t.Fatalf("admin_rest_addr default lost: got %q", cfg.Server.AdminRESTAddr)
+		t.Fatalf("Server.AdminRESTAddr = %q, want default %q", cfg.Server.AdminRESTAddr, ":4445")
 	}
 	if cfg.Server.ShutdownTimeout != 30*time.Second {
-		t.Fatalf("shutdown_timeout default lost: got %v", cfg.Server.ShutdownTimeout)
+		t.Fatalf("Server.ShutdownTimeout = %v, want default %v", cfg.Server.ShutdownTimeout, 30*time.Second)
 	}
 	if cfg.Postgres.DSN != "postgres://from-env/db" {
-		t.Fatalf("env should win for DSN: got %q", cfg.Postgres.DSN)
+		t.Fatalf("Postgres.DSN = %q, want env override %q", cfg.Postgres.DSN, "postgres://from-env/db")
 	}
 	if cfg.Log.Level != "debug" {
-		t.Fatalf("env should win for log level: got %q", cfg.Log.Level)
+		t.Fatalf("Log.Level = %q, want env override %q", cfg.Log.Level, "debug")
 	}
 	if cfg.Token.AccessTokenTTL != time.Hour {
-		t.Fatalf("token TTL default lost: got %v", cfg.Token.AccessTokenTTL)
+		t.Fatalf("Token.AccessTokenTTL = %v, want default %v", cfg.Token.AccessTokenTTL, time.Hour)
 	}
 }
 
 func TestLoad_MissingRequired(t *testing.T) {
 	_, err := config.Load("")
 	if err == nil {
-		t.Fatal("expected validation error")
+		t.Fatalf("Load(\"\") = nil error, want validation error for missing required fields")
+	}
+	if !strings.Contains(err.Error(), "invalid config") {
+		t.Fatalf("Load(\"\") error = %q, want it to mention %q", err.Error(), "invalid config")
 	}
 }
 
 func TestLoad_MissingFile(t *testing.T) {
-	_, err := config.Load(filepath.Join(t.TempDir(), "nope.yaml"))
+	path := filepath.Join(t.TempDir(), "nope.yaml")
+	_, err := config.Load(path)
 	if err == nil {
-		t.Fatal("expected read error")
+		t.Fatalf("Load(%q) = nil error, want read error for missing file", path)
+	}
+	if !strings.Contains(err.Error(), "read config file") {
+		t.Fatalf("Load missing file error = %q, want substring %q", err.Error(), "read config file")
 	}
 }
 
 func TestLoad_InvalidYAML(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bad.yaml")
 	if err := os.WriteFile(path, []byte(":\n  -"), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("write bad yaml fixture: %v", err)
 	}
 	_, err := config.Load(path)
 	if err == nil {
-		t.Fatal("expected parse error")
+		t.Fatalf("Load(%q) = nil error, want YAML parse error", path)
+	}
+	if !strings.Contains(err.Error(), "parse config file") {
+		t.Fatalf("Load invalid YAML error = %q, want substring %q", err.Error(), "parse config file")
 	}
 }
 
@@ -98,7 +109,7 @@ admin:
   token: admin-token
 `
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
+		t.Fatalf("write config fixture: %v", err)
 	}
 
 	t.Setenv("GRANTO_CORS_ENABLED", "1")
@@ -110,25 +121,28 @@ admin:
 
 	cfg, err := config.Load(path)
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("Load unexpected error: %v", err)
 	}
 	if !cfg.CORS.Enabled {
-		t.Fatal("cors enabled")
+		t.Fatalf("CORS.Enabled = false, want true from GRANTO_CORS_ENABLED=1")
 	}
-	if len(cfg.CORS.AllowedOrigins) != 2 || cfg.CORS.AllowedOrigins[1] != "https://b.com" {
-		t.Fatalf("origins: %#v", cfg.CORS.AllowedOrigins)
+	if len(cfg.CORS.AllowedOrigins) != 2 {
+		t.Fatalf("CORS.AllowedOrigins len = %d (%#v), want 2", len(cfg.CORS.AllowedOrigins), cfg.CORS.AllowedOrigins)
+	}
+	if cfg.CORS.AllowedOrigins[1] != "https://b.com" {
+		t.Fatalf("CORS.AllowedOrigins[1] = %q, want %q", cfg.CORS.AllowedOrigins[1], "https://b.com")
 	}
 	if !cfg.OIDC.DynamicClientRegistration.Enabled {
-		t.Fatal("dcr enabled")
+		t.Fatalf("OIDC.DynamicClientRegistration.Enabled = false, want true from GRANTO_OIDC_DCR_ENABLED")
 	}
 	if len(cfg.OIDC.DynamicClientRegistration.DefaultScopes) != 2 {
-		t.Fatalf("dcr scopes: %#v", cfg.OIDC.DynamicClientRegistration.DefaultScopes)
+		t.Fatalf("DCR DefaultScopes = %#v, want 2 scopes", cfg.OIDC.DynamicClientRegistration.DefaultScopes)
 	}
 	if cfg.Token.Issuer != "https://from-env" {
-		t.Fatalf("issuer: %q", cfg.Token.Issuer)
+		t.Fatalf("Token.Issuer = %q, want env override %q", cfg.Token.Issuer, "https://from-env")
 	}
 	if cfg.OAuth2.LoginURL != "https://login-from-env" {
-		t.Fatalf("login: %q", cfg.OAuth2.LoginURL)
+		t.Fatalf("OAuth2.LoginURL = %q, want env override %q", cfg.OAuth2.LoginURL, "https://login-from-env")
 	}
 }
 
@@ -141,6 +155,9 @@ func TestLoad_MasterKeyTooShort(t *testing.T) {
 
 	_, err := config.Load("")
 	if err == nil {
-		t.Fatal("expected validation error")
+		t.Fatalf("Load with short master_key = nil error, want validation error")
+	}
+	if !strings.Contains(err.Error(), "at least 32") {
+		t.Fatalf("error = %q, want substring %q", err.Error(), "at least 32")
 	}
 }

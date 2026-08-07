@@ -9,31 +9,45 @@ import (
 func TestDialLocal(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
+		name     string
 		in, want string
 	}{
-		{":4446", "127.0.0.1:4446"},
-		{"127.0.0.1:4446", "127.0.0.1:4446"},
-		{"localhost:4446", "localhost:4446"},
-		{"", ""},
+		{name: "port-only becomes loopback", in: ":4446", want: "127.0.0.1:4446"},
+		{name: "explicit loopback unchanged", in: "127.0.0.1:4446", want: "127.0.0.1:4446"},
+		{name: "hostname unchanged", in: "localhost:4446", want: "localhost:4446"},
+		{name: "empty unchanged", in: "", want: ""},
 	}
 	for _, tc := range cases {
-		if got := dialLocal(tc.in); got != tc.want {
-			t.Fatalf("dialLocal(%q)=%q want %q", tc.in, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got := dialLocal(tc.in)
+			if got != tc.want {
+				t.Fatalf("dialLocal(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 
 func TestIncomingHeaderMatcher(t *testing.T) {
 	t.Parallel()
-	for _, key := range []string{"Authorization", "authorization", "AUTHORIZATION"} {
-		out, ok := incomingHeaderMatcher(key)
-		if !ok || out != "authorization" {
-			t.Fatalf("%q → %q ok=%v", key, out, ok)
+
+	t.Run("authorization is always forwarded", func(t *testing.T) {
+		for _, key := range []string{"Authorization", "authorization", "AUTHORIZATION"} {
+			out, ok := incomingHeaderMatcher(key)
+			if !ok {
+				t.Fatalf("incomingHeaderMatcher(%q) ok = false, want true", key)
+			}
+			if out != "authorization" {
+				t.Fatalf("incomingHeaderMatcher(%q) = %q, want %q", key, out, "authorization")
+			}
 		}
-	}
-	out, ok := incomingHeaderMatcher("X-Custom")
-	def, defOK := runtime.DefaultHeaderMatcher("X-Custom")
-	if out != def || ok != defOK {
-		t.Fatalf("custom: got %q/%v want %q/%v", out, ok, def, defOK)
-	}
+	})
+
+	t.Run("other headers use gateway default matcher", func(t *testing.T) {
+		const key = "X-Custom"
+		out, ok := incomingHeaderMatcher(key)
+		def, defOK := runtime.DefaultHeaderMatcher(key)
+		if out != def || ok != defOK {
+			t.Fatalf("incomingHeaderMatcher(%q) = (%q, %v), want default (%q, %v)", key, out, ok, def, defOK)
+		}
+	})
 }

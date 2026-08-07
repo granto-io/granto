@@ -13,23 +13,43 @@ import (
 func TestDomainErrToStatus(t *testing.T) {
 	t.Parallel()
 
-	if err := domainErrToStatus(nil); err != nil {
-		t.Fatalf("nil: %v", err)
-	}
+	t.Run("nil error stays nil", func(t *testing.T) {
+		if err := domainErrToStatus(nil); err != nil {
+			t.Fatalf("domainErrToStatus(nil) = %v, want nil", err)
+		}
+	})
 
-	st, ok := status.FromError(domainErrToStatus(domain.ErrClientNotFound))
-	if !ok || st.Code() != codes.NotFound {
-		t.Fatalf("not found: %v", domainErrToStatus(domain.ErrClientNotFound))
-	}
+	t.Run("client not found becomes NotFound", func(t *testing.T) {
+		err := domainErrToStatus(domain.ErrClientNotFound)
+		st, ok := status.FromError(err)
+		if !ok {
+			t.Fatalf("domainErrToStatus(ErrClientNotFound) = %v, want gRPC status", err)
+		}
+		if st.Code() != codes.NotFound {
+			t.Fatalf("status code = %v, want %v; message=%q", st.Code(), codes.NotFound, st.Message())
+		}
+	})
 
-	wrapped := errors.Join(errors.New("wrap"), domain.ErrClientNotFound)
-	st, ok = status.FromError(domainErrToStatus(wrapped))
-	if !ok || st.Code() != codes.NotFound {
-		t.Fatalf("wrapped not found: %v", domainErrToStatus(wrapped))
-	}
+	t.Run("wrapped client not found becomes NotFound", func(t *testing.T) {
+		wrapped := errors.Join(errors.New("wrap"), domain.ErrClientNotFound)
+		err := domainErrToStatus(wrapped)
+		st, ok := status.FromError(err)
+		if !ok {
+			t.Fatalf("domainErrToStatus(wrapped ErrClientNotFound) = %v, want gRPC status", err)
+		}
+		if st.Code() != codes.NotFound {
+			t.Fatalf("status code = %v, want %v; message=%q", st.Code(), codes.NotFound, st.Message())
+		}
+	})
 
-	st, ok = status.FromError(domainErrToStatus(errors.New("boom")))
-	if !ok || st.Code() != codes.Internal {
-		t.Fatalf("other: %v", domainErrToStatus(errors.New("boom")))
-	}
+	t.Run("other errors become Internal", func(t *testing.T) {
+		err := domainErrToStatus(errors.New("boom"))
+		st, ok := status.FromError(err)
+		if !ok {
+			t.Fatalf("domainErrToStatus(boom) = %v, want gRPC status", err)
+		}
+		if st.Code() != codes.Internal {
+			t.Fatalf("status code = %v, want %v; message=%q", st.Code(), codes.Internal, st.Message())
+		}
+	})
 }
