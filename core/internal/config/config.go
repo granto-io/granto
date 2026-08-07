@@ -74,8 +74,8 @@ type OAuth2Config struct {
 
 // OIDCConfig holds OIDC-specific knobs.
 type OIDCConfig struct {
-	ExtraScopes                 []string                          `yaml:"extra_scopes"`
-	DynamicClientRegistration   DynamicClientRegistrationConfig   `yaml:"dynamic_client_registration"`
+	ExtraScopes               []string                        `yaml:"extra_scopes"`
+	DynamicClientRegistration DynamicClientRegistrationConfig `yaml:"dynamic_client_registration"`
 }
 
 // DynamicClientRegistrationConfig controls public OIDC Dynamic Client Registration
