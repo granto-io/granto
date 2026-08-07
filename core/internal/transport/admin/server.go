@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -43,12 +44,17 @@ func NewServer(clients adminv1.ClientServiceServer, cfg *config.Config) *Server 
 	return &Server{grpcSrv: grpcSrv}
 }
 
-// RunGRPC listens on addr until StopGRPC is called.
-func (s *Server) RunGRPC(addr string) error {
+// ListenGRPC binds the gRPC port so the gateway can dial safely before Serve.
+func (s *Server) ListenGRPC(addr string) (net.Listener, error) {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("listen admin grpc: %w", err)
+		return nil, fmt.Errorf("listen admin grpc: %w", err)
 	}
+	return lis, nil
+}
+
+// ServeGRPC serves on an already-bound listener until StopGRPC is called.
+func (s *Server) ServeGRPC(lis net.Listener) error {
 	if err := s.grpcSrv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 		return fmt.Errorf("admin grpc serve: %w", err)
 	}
@@ -63,7 +69,9 @@ func (s *Server) RunGateway(ctx context.Context, httpAddr, grpcAddr string) erro
 	}
 	s.gwConn = conn
 
-	mux := runtime.NewServeMux()
+	mux := runtime.NewServeMux(
+		runtime.WithIncomingHeaderMatcher(incomingHeaderMatcher),
+	)
 	if err := adminv1.RegisterClientServiceHandler(ctx, mux, conn); err != nil {
 		_ = conn.Close()
 		return fmt.Errorf("register client gateway: %w", err)
@@ -80,6 +88,17 @@ func (s *Server) RunGateway(ctx context.Context, httpAddr, grpcAddr string) erro
 		return fmt.Errorf("admin gateway serve: %w", err)
 	}
 	return nil
+}
+
+// incomingHeaderMatcher forwards Authorization (and friends) into gRPC metadata
+// so bearerAuthInterceptor sees Postman/curl Bearer tokens.
+func incomingHeaderMatcher(key string) (string, bool) {
+	switch strings.ToLower(key) {
+	case "authorization":
+		return "authorization", true
+	default:
+		return runtime.DefaultHeaderMatcher(key)
+	}
 }
 
 func dialLocal(addr string) string {
