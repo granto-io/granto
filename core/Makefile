@@ -15,7 +15,7 @@ generate: generate-wire generate-proto ## Run all code generators
 
 .PHONY: generate-wire
 generate-wire: ## Regenerate Google Wire (internal/di)
-	go generate ./internal/di
+	GOWORK=off go generate ./internal/di
 
 .PHONY: generate-proto
 generate-proto: ## Regenerate admin gRPC / gateway (api/admin → gen/admin)
