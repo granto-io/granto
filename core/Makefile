@@ -29,4 +29,4 @@ test: ## Run unit tests
 
 .PHONY: build
 build: ## Build granto-core binary
-	go build -o bin/granto-core ./cmd/granto-core
+	go build -o bin/granto-core ./cmd
