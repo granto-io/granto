@@ -78,19 +78,19 @@ func TestCreateClient_PublicNoSecret(t *testing.T) {
 		ClientType: "public",
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateClient(public) unexpected error: %v", err)
 	}
 	if resp.ClientSecret != "" {
-		t.Fatalf("secret returned for public: %q", resp.ClientSecret)
+		t.Fatalf("ClientSecret = %q, want empty for public client", resp.ClientSecret)
 	}
 	if repo.lastCreate.ClientSecretHash != "" {
-		t.Fatal("hash stored for public")
+		t.Fatalf("persisted ClientSecretHash = %q, want empty for public client", repo.lastCreate.ClientSecretHash)
 	}
 	if resp.Client.ClientType != "public" {
-		t.Fatalf("type: %q", resp.Client.ClientType)
+		t.Fatalf("Client.ClientType = %q, want %q", resp.Client.ClientType, "public")
 	}
 	if resp.Client.TokenEndpointAuthMethod != "none" {
-		t.Fatalf("auth: %q", resp.Client.TokenEndpointAuthMethod)
+		t.Fatalf("Client.TokenEndpointAuthMethod = %q, want %q", resp.Client.TokenEndpointAuthMethod, "none")
 	}
 }
 
@@ -99,41 +99,46 @@ func TestCreateClient_AutoSecret(t *testing.T) {
 	s := NewClientServer(repo)
 	resp, err := s.CreateClient(context.Background(), &adminv1.CreateClientRequest{Name: "api"})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateClient unexpected error: %v", err)
 	}
 	if resp.ClientSecret == "" {
-		t.Fatal("expected plaintext secret once")
+		t.Fatalf("ClientSecret is empty, want generated plaintext returned once")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(repo.lastCreate.ClientSecretHash), []byte(resp.ClientSecret)); err != nil {
-		t.Fatalf("hash mismatch: %v", err)
+		t.Fatalf("persisted hash does not match returned ClientSecret: %v", err)
 	}
 	if resp.Client.ClientId == "" {
-		t.Fatal("expected generated client_id")
+		t.Fatalf("Client.ClientId is empty, want auto-generated UUID string")
 	}
-	if resp.Client.TenantId != domain.DefaultTenantID.String() {
-		t.Fatalf("tenant: %q", resp.Client.TenantId)
+	wantTenant := domain.DefaultTenantID.String()
+	if resp.Client.TenantId != wantTenant {
+		t.Fatalf("Client.TenantId = %q, want default tenant %q", resp.Client.TenantId, wantTenant)
 	}
 }
 
 func TestCreateClient_ProvidedSecret(t *testing.T) {
 	repo := &mockClients{}
 	s := NewClientServer(repo)
+	const (
+		wantID     = "fixed-id"
+		wantSecret = "provided-secret"
+	)
 	resp, err := s.CreateClient(context.Background(), &adminv1.CreateClientRequest{
 		Name:         "api",
-		ClientId:     "fixed-id",
-		ClientSecret: "provided-secret",
+		ClientId:     wantID,
+		ClientSecret: wantSecret,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateClient unexpected error: %v", err)
 	}
-	if resp.ClientSecret != "provided-secret" {
-		t.Fatalf("secret: %q", resp.ClientSecret)
+	if resp.ClientSecret != wantSecret {
+		t.Fatalf("ClientSecret = %q, want provided %q", resp.ClientSecret, wantSecret)
 	}
-	if resp.Client.ClientId != "fixed-id" {
-		t.Fatalf("client_id: %q", resp.Client.ClientId)
+	if resp.Client.ClientId != wantID {
+		t.Fatalf("Client.ClientId = %q, want %q", resp.Client.ClientId, wantID)
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(repo.lastCreate.ClientSecretHash), []byte("provided-secret")); err != nil {
-		t.Fatal(err)
+	if err := bcrypt.CompareHashAndPassword([]byte(repo.lastCreate.ClientSecretHash), []byte(wantSecret)); err != nil {
+		t.Fatalf("persisted hash does not match provided secret %q: %v", wantSecret, err)
 	}
 }
 
@@ -150,7 +155,7 @@ func TestGetClient(t *testing.T) {
 	id := uuid.New()
 	repo := &mockClients{getByID: func(_ context.Context, got uuid.UUID) (*domain.Client, error) {
 		if got != id {
-			t.Fatalf("id: %v", got)
+			t.Fatalf("GetByID called with id=%v, want %v", got, id)
 		}
 		return &domain.Client{
 			ID:        id,
@@ -163,22 +168,28 @@ func TestGetClient(t *testing.T) {
 	}}
 	s := NewClientServer(repo)
 
-	_, err := s.GetClient(context.Background(), &adminv1.GetClientRequest{Id: "bad"})
-	assertStatusCode(t, err, codes.InvalidArgument)
+	t.Run("invalid uuid is invalid argument", func(t *testing.T) {
+		_, err := s.GetClient(context.Background(), &adminv1.GetClientRequest{Id: "bad"})
+		assertStatusCode(t, err, codes.InvalidArgument)
+	})
 
-	resp, err := s.GetClient(context.Background(), &adminv1.GetClientRequest{Id: id.String()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.Client.Name != "n" {
-		t.Fatalf("%#v", resp.Client)
-	}
+	t.Run("existing client", func(t *testing.T) {
+		resp, err := s.GetClient(context.Background(), &adminv1.GetClientRequest{Id: id.String()})
+		if err != nil {
+			t.Fatalf("GetClient unexpected error: %v", err)
+		}
+		if resp.Client.Name != "n" {
+			t.Fatalf("Client.Name = %q, want %q", resp.Client.Name, "n")
+		}
+	})
 
-	repo.getByID = func(context.Context, uuid.UUID) (*domain.Client, error) {
-		return nil, domain.ErrClientNotFound
-	}
-	_, err = s.GetClient(context.Background(), &adminv1.GetClientRequest{Id: id.String()})
-	assertStatusCode(t, err, codes.NotFound)
+	t.Run("missing client is not found", func(t *testing.T) {
+		repo.getByID = func(context.Context, uuid.UUID) (*domain.Client, error) {
+			return nil, domain.ErrClientNotFound
+		}
+		_, err := s.GetClient(context.Background(), &adminv1.GetClientRequest{Id: id.String()})
+		assertStatusCode(t, err, codes.NotFound)
+	})
 }
 
 func TestListClients_DefaultLimit(t *testing.T) {
@@ -191,13 +202,19 @@ func TestListClients_DefaultLimit(t *testing.T) {
 		Offset: 10,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ListClients unexpected error: %v", err)
 	}
-	if repo.lastFilter.Limit != 50 || repo.lastFilter.Offset != 10 || repo.lastFilter.Search != "app" {
-		t.Fatalf("%#v", repo.lastFilter)
+	if repo.lastFilter.Limit != 50 {
+		t.Fatalf("filter.Limit = %d, want default 50 when request limit is unset", repo.lastFilter.Limit)
+	}
+	if repo.lastFilter.Offset != 10 {
+		t.Fatalf("filter.Offset = %d, want %d", repo.lastFilter.Offset, 10)
+	}
+	if repo.lastFilter.Search != "app" {
+		t.Fatalf("filter.Search = %q, want %q", repo.lastFilter.Search, "app")
 	}
 	if repo.lastTenant != domain.DefaultTenantID {
-		t.Fatalf("tenant %v", repo.lastTenant)
+		t.Fatalf("tenantID = %v, want DefaultTenantID %v", repo.lastTenant, domain.DefaultTenantID)
 	}
 }
 
@@ -215,49 +232,59 @@ func TestUpdateClient(t *testing.T) {
 		getByID: func(context.Context, uuid.UUID) (*domain.Client, error) { return existing, nil },
 		updateFn: func(_ context.Context, c *domain.Client) error {
 			if c.Name != "new" {
-				t.Fatalf("name: %q", c.Name)
+				t.Fatalf("Update called with Name=%q, want %q", c.Name, "new")
 			}
 			return nil
 		},
 	}
 	s := NewClientServer(repo)
 
-	_, err := s.UpdateClient(context.Background(), &adminv1.UpdateClientRequest{Id: "x"})
-	assertStatusCode(t, err, codes.InvalidArgument)
-
-	resp, err := s.UpdateClient(context.Background(), &adminv1.UpdateClientRequest{
-		Id:   id.String(),
-		Name: "new",
+	t.Run("invalid uuid is invalid argument", func(t *testing.T) {
+		_, err := s.UpdateClient(context.Background(), &adminv1.UpdateClientRequest{Id: "x"})
+		assertStatusCode(t, err, codes.InvalidArgument)
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.Client.Name != "new" {
-		t.Fatalf("%q", resp.Client.Name)
-	}
+
+	t.Run("updates name", func(t *testing.T) {
+		resp, err := s.UpdateClient(context.Background(), &adminv1.UpdateClientRequest{
+			Id:   id.String(),
+			Name: "new",
+		})
+		if err != nil {
+			t.Fatalf("UpdateClient unexpected error: %v", err)
+		}
+		if resp.Client.Name != "new" {
+			t.Fatalf("Client.Name = %q, want %q", resp.Client.Name, "new")
+		}
+	})
 }
 
 func TestDeleteClient(t *testing.T) {
 	id := uuid.New()
 	repo := &mockClients{deleteFn: func(_ context.Context, got uuid.UUID) error {
 		if got != id {
-			t.Fatalf("%v", got)
+			t.Fatalf("Delete called with id=%v, want %v", got, id)
 		}
 		return nil
 	}}
 	s := NewClientServer(repo)
 
-	_, err := s.DeleteClient(context.Background(), &adminv1.DeleteClientRequest{Id: "bad"})
-	assertStatusCode(t, err, codes.InvalidArgument)
+	t.Run("invalid uuid is invalid argument", func(t *testing.T) {
+		_, err := s.DeleteClient(context.Background(), &adminv1.DeleteClientRequest{Id: "bad"})
+		assertStatusCode(t, err, codes.InvalidArgument)
+	})
 
-	_, err = s.DeleteClient(context.Background(), &adminv1.DeleteClientRequest{Id: id.String()})
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Run("success", func(t *testing.T) {
+		_, err := s.DeleteClient(context.Background(), &adminv1.DeleteClientRequest{Id: id.String()})
+		if err != nil {
+			t.Fatalf("DeleteClient unexpected error: %v", err)
+		}
+	})
 
-	repo.deleteFn = func(context.Context, uuid.UUID) error { return domain.ErrClientNotFound }
-	_, err = s.DeleteClient(context.Background(), &adminv1.DeleteClientRequest{Id: id.String()})
-	assertStatusCode(t, err, codes.NotFound)
+	t.Run("missing client is not found", func(t *testing.T) {
+		repo.deleteFn = func(context.Context, uuid.UUID) error { return domain.ErrClientNotFound }
+		_, err := s.DeleteClient(context.Background(), &adminv1.DeleteClientRequest{Id: id.String()})
+		assertStatusCode(t, err, codes.NotFound)
+	})
 }
 
 var _ repository.ClientRepository = (*mockClients)(nil)
