@@ -24,6 +24,10 @@ generate-proto: ## Proto only (core)
 test: ## Test core
 	$(MAKE) -C core test
 
+.PHONY: lint
+lint: ## Lint core (golangci-lint)
+	$(MAKE) -C core lint
+
 .PHONY: build
 build: ## Build core
 	$(MAKE) -C core build

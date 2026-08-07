@@ -343,19 +343,3 @@ func TestStructpbMapHelpers(t *testing.T) {
 		}
 	})
 }
-
-func TestGrantTypeStringHelpers(t *testing.T) {
-	t.Parallel()
-	gs := []domain.GrantType{domain.GrantTypeAuthorizationCode, domain.GrantTypeClientCredentials}
-	ss := grantTypesToStrings(gs)
-	if len(ss) != 2 {
-		t.Fatalf("grantTypesToStrings len = %d, want 2; got %#v", len(ss), ss)
-	}
-	if ss[0] != "authorization_code" {
-		t.Fatalf("grantTypesToStrings()[0] = %q, want %q", ss[0], "authorization_code")
-	}
-	back := stringsToGrantTypes(ss)
-	if back[1] != domain.GrantTypeClientCredentials {
-		t.Fatalf("stringsToGrantTypes()[1] = %q, want %q", back[1], domain.GrantTypeClientCredentials)
-	}
-}

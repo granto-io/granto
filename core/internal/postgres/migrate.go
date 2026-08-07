@@ -12,7 +12,7 @@ import (
 )
 
 // Migrate applies all pending SQL migrations. Safe to call on every startup.
-func Migrate(dsn string) error {
+func Migrate(dsn string) (err error) {
 	src, err := iofs.New(migrations.FS, ".")
 	if err != nil {
 		return fmt.Errorf("load migrations: %w", err)
@@ -22,7 +22,19 @@ func Migrate(dsn string) error {
 	if err != nil {
 		return fmt.Errorf("create migrator: %w", err)
 	}
-	defer m.Close()
+	defer func() {
+		srcErr, dbErr := m.Close()
+		if err != nil {
+			return
+		}
+		if srcErr != nil {
+			err = fmt.Errorf("close migration source: %w", srcErr)
+			return
+		}
+		if dbErr != nil {
+			err = fmt.Errorf("close migration database: %w", dbErr)
+		}
+	}()
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("apply migrations: %w", err)

@@ -91,8 +91,7 @@ type DynamicClientRegistrationConfig struct {
 
 // AdminConfig holds Admin API access settings (MVP: static bearer).
 type AdminConfig struct {
-	Token      string   `yaml:"token"`
-	AllowedIPs []string `yaml:"allowed_ips"`
+	Token string `yaml:"token"`
 }
 
 // CORSConfig holds Cross-Origin Resource Sharing settings.

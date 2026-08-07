@@ -15,20 +15,52 @@ import (
 	"github.com/granto-io/granto/core/internal/repository"
 )
 
+// clientColumns lists every clients column in scan / SELECT order (one per line).
 const clientColumns = `
-	id, tenant_id, client_id, client_secret_hash, name, description,
-	client_type, grant_types, response_types, redirect_uris, allowed_cors_origins,
-	allowed_scopes, default_scopes, audience,
-	token_endpoint_auth_method, token_endpoint_auth_signing_alg, require_pkce,
-	subject_type, sector_identifier_uri, id_token_signed_alg, userinfo_signed_alg,
-	post_logout_uris, frontchannel_logout_uri, frontchannel_logout_session_required,
-	backchannel_logout_uri, backchannel_logout_session_required,
-	access_token_ttl, refresh_token_ttl, id_token_ttl,
+	id,
+	tenant_id,
+	client_id,
+	client_secret_hash,
+	name,
+	description,
+	client_type,
+	grant_types,
+	response_types,
+	redirect_uris,
+	allowed_cors_origins,
+	allowed_scopes,
+	default_scopes,
+	audience,
+	token_endpoint_auth_method,
+	token_endpoint_auth_signing_alg,
+	require_pkce,
+	subject_type,
+	sector_identifier_uri,
+	id_token_signed_alg,
+	userinfo_signed_alg,
+	post_logout_uris,
+	frontchannel_logout_uri,
+	frontchannel_logout_session_required,
+	backchannel_logout_uri,
+	backchannel_logout_session_required,
+	access_token_ttl,
+	refresh_token_ttl,
+	id_token_ttl,
 	skip_consent,
-	logo_uri, client_uri, policy_uri, tos_uri, contacts, metadata,
-	protocols, jwks, jwks_uri,
-	registration_access_token_hash, is_dynamic,
-	created_at, updated_at, deleted_at`
+	logo_uri,
+	client_uri,
+	policy_uri,
+	tos_uri,
+	contacts,
+	metadata,
+	protocols,
+	jwks,
+	jwks_uri,
+	registration_access_token_hash,
+	is_dynamic,
+	created_at,
+	updated_at,
+	deleted_at`
 
 // ClientRepository is the PostgreSQL implementation of repository.ClientRepository.
 type ClientRepository struct {
@@ -41,8 +73,11 @@ func NewClientRepository(db *postgres.DB) *ClientRepository {
 }
 
 func (r *ClientRepository) GetByClientID(ctx context.Context, tenantID uuid.UUID, clientID string) (*domain.Client, error) {
-	const q = `SELECT` + clientColumns + `FROM clients
-	           WHERE tenant_id = $1 AND client_id = $2 AND deleted_at IS NULL`
+	const q = `SELECT` + clientColumns + `
+		FROM clients
+		WHERE tenant_id = $1
+		  AND client_id = $2
+		  AND deleted_at IS NULL`
 	c, err := scanClient(r.db.Conn(ctx).QueryRow(ctx, q, tenantID, clientID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrClientNotFound
@@ -51,8 +86,10 @@ func (r *ClientRepository) GetByClientID(ctx context.Context, tenantID uuid.UUID
 }
 
 func (r *ClientRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Client, error) {
-	const q = `SELECT` + clientColumns + `FROM clients
-	           WHERE id = $1 AND deleted_at IS NULL`
+	const q = `SELECT` + clientColumns + `
+		FROM clients
+		WHERE id = $1
+		  AND deleted_at IS NULL`
 	c, err := scanClient(r.db.Conn(ctx).QueryRow(ctx, q, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrClientNotFound
@@ -61,7 +98,10 @@ func (r *ClientRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.C
 }
 
 func (r *ClientRepository) List(ctx context.Context, tenantID uuid.UUID, filter repository.ClientFilter) ([]*domain.Client, error) {
-	q := `SELECT` + clientColumns + `FROM clients WHERE tenant_id = $1 AND deleted_at IS NULL`
+	q := `SELECT` + clientColumns + `
+		FROM clients
+		WHERE tenant_id = $1
+		  AND deleted_at IS NULL`
 	args := []any{tenantID}
 
 	if filter.Search != "" {
@@ -99,31 +139,89 @@ func (r *ClientRepository) List(ctx context.Context, tenantID uuid.UUID, filter 
 func (r *ClientRepository) Create(ctx context.Context, c *domain.Client) error {
 	const q = `
 		INSERT INTO clients (
-			id, tenant_id, client_id, client_secret_hash, name, description,
-			client_type, grant_types, response_types, redirect_uris, allowed_cors_origins,
-			allowed_scopes, default_scopes, audience,
-			token_endpoint_auth_method, token_endpoint_auth_signing_alg, require_pkce,
-			subject_type, sector_identifier_uri, id_token_signed_alg, userinfo_signed_alg,
-			post_logout_uris, frontchannel_logout_uri, frontchannel_logout_session_required,
-			backchannel_logout_uri, backchannel_logout_session_required,
-			access_token_ttl, refresh_token_ttl, id_token_ttl,
+			id,
+			tenant_id,
+			client_id,
+			client_secret_hash,
+			name,
+			description,
+			client_type,
+			grant_types,
+			response_types,
+			redirect_uris,
+			allowed_cors_origins,
+			allowed_scopes,
+			default_scopes,
+			audience,
+			token_endpoint_auth_method,
+			token_endpoint_auth_signing_alg,
+			require_pkce,
+			subject_type,
+			sector_identifier_uri,
+			id_token_signed_alg,
+			userinfo_signed_alg,
+			post_logout_uris,
+			frontchannel_logout_uri,
+			frontchannel_logout_session_required,
+			backchannel_logout_uri,
+			backchannel_logout_session_required,
+			access_token_ttl,
+			refresh_token_ttl,
+			id_token_ttl,
 			skip_consent,
-			logo_uri, client_uri, policy_uri, tos_uri, contacts, metadata,
-			protocols, jwks, jwks_uri,
-			registration_access_token_hash, is_dynamic
+			logo_uri,
+			client_uri,
+			policy_uri,
+			tos_uri,
+			contacts,
+			metadata,
+			protocols,
+			jwks,
+			jwks_uri,
+			registration_access_token_hash,
+			is_dynamic
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,
-			$7,$8,$9,$10,$11,
-			$12,$13,$14,
-			$15,$16,$17,
-			$18,$19,$20,$21,
-			$22,$23,$24,
-			$25,$26,
-			$27,$28,$29,
+			$1,
+			$2,
+			$3,
+			$4,
+			$5,
+			$6,
+			$7,
+			$8,
+			$9,
+			$10,
+			$11,
+			$12,
+			$13,
+			$14,
+			$15,
+			$16,
+			$17,
+			$18,
+			$19,
+			$20,
+			$21,
+			$22,
+			$23,
+			$24,
+			$25,
+			$26,
+			$27,
+			$28,
+			$29,
 			$30,
-			$31,$32,$33,$34,$35,$36,
-			$37,$38,$39,
-			$40,$41
+			$31,
+			$32,
+			$33,
+			$34,
+			$35,
+			$36,
+			$37,
+			$38,
+			$39,
+			$40,
+			$41
 		)`
 
 	meta, err := marshalJSONMap(c.Metadata)
@@ -156,19 +254,50 @@ func (r *ClientRepository) Create(ctx context.Context, c *domain.Client) error {
 		protocols = []string{"oauth2", "oidc"}
 	}
 
-	_, err = r.db.Conn(ctx).Exec(ctx, q,
-		c.ID, c.TenantID, c.ClientID, nullableStr(c.ClientSecretHash), c.Name, nullableStr(c.Description),
-		string(c.ClientType), grantTypesToStrings(c.GrantTypes), c.ResponseTypes, c.RedirectURIs, c.AllowedCORSOrigins,
-		c.AllowedScopes, c.DefaultScopes, c.Audience,
-		string(authMethod), nullableStr(c.TokenEndpointAuthSigningAlg), c.RequirePKCE,
-		string(subjectType), nullableStr(c.SectorIdentifierURI), idAlg, uiAlg,
-		c.PostLogoutURIs, nullableStr(c.FrontChannelLogoutURI), c.FrontChannelLogoutSessionRequired,
-		nullableStr(c.BackChannelLogoutURI), c.BackChannelLogoutSessionRequired,
-		durationToInterval(c.AccessTokenTTL), durationToInterval(c.RefreshTokenTTL), durationToInterval(c.IDTokenTTL),
+	_, err = r.db.Conn(ctx).Exec(
+		ctx,
+		q,
+		c.ID,
+		c.TenantID,
+		c.ClientID,
+		nullableStr(c.ClientSecretHash),
+		c.Name,
+		nullableStr(c.Description),
+		string(c.ClientType),
+		domain.GrantTypesToStrings(c.GrantTypes),
+		c.ResponseTypes,
+		c.RedirectURIs,
+		c.AllowedCORSOrigins,
+		c.AllowedScopes,
+		c.DefaultScopes,
+		c.Audience,
+		string(authMethod),
+		nullableStr(c.TokenEndpointAuthSigningAlg),
+		c.RequirePKCE,
+		string(subjectType),
+		nullableStr(c.SectorIdentifierURI),
+		idAlg,
+		uiAlg,
+		c.PostLogoutURIs,
+		nullableStr(c.FrontChannelLogoutURI),
+		c.FrontChannelLogoutSessionRequired,
+		nullableStr(c.BackChannelLogoutURI),
+		c.BackChannelLogoutSessionRequired,
+		durationToInterval(c.AccessTokenTTL),
+		durationToInterval(c.RefreshTokenTTL),
+		durationToInterval(c.IDTokenTTL),
 		c.SkipConsent,
-		nullableStr(c.LogoURI), nullableStr(c.ClientURI), nullableStr(c.PolicyURI), nullableStr(c.TosURI), c.Contacts, meta,
-		protocols, jwks, nullableStr(c.JWKSURI),
-		nullableStr(c.RegistrationAccessTokenHash), c.IsDynamic,
+		nullableStr(c.LogoURI),
+		nullableStr(c.ClientURI),
+		nullableStr(c.PolicyURI),
+		nullableStr(c.TosURI),
+		c.Contacts,
+		meta,
+		protocols,
+		jwks,
+		nullableStr(c.JWKSURI),
+		nullableStr(c.RegistrationAccessTokenHash),
+		c.IsDynamic,
 	)
 	if err != nil {
 		return fmt.Errorf("create client: %w", err)
@@ -218,7 +347,8 @@ func (r *ClientRepository) Update(ctx context.Context, c *domain.Client) error {
 			registration_access_token_hash = $37,
 			is_dynamic = $38,
 			updated_at = now()
-		WHERE id = $39 AND deleted_at IS NULL`
+		WHERE id = $39
+		  AND deleted_at IS NULL`
 
 	meta, err := marshalJSONMap(c.Metadata)
 	if err != nil {
@@ -229,19 +359,47 @@ func (r *ClientRepository) Update(ctx context.Context, c *domain.Client) error {
 		return fmt.Errorf("marshal jwks: %w", err)
 	}
 
-	tag, err := r.db.Conn(ctx).Exec(ctx, q,
-		nullableStr(c.ClientSecretHash), c.Name, nullableStr(c.Description),
-		string(c.ClientType), grantTypesToStrings(c.GrantTypes), c.ResponseTypes, c.RedirectURIs,
-		c.AllowedCORSOrigins, c.AllowedScopes, c.DefaultScopes, c.Audience,
-		string(c.TokenEndpointAuthMethod), nullableStr(c.TokenEndpointAuthSigningAlg), c.RequirePKCE,
-		string(c.SubjectType), nullableStr(c.SectorIdentifierURI), c.IDTokenSignedAlg, c.UserinfoSignedAlg,
-		c.PostLogoutURIs, nullableStr(c.FrontChannelLogoutURI), c.FrontChannelLogoutSessionRequired,
-		nullableStr(c.BackChannelLogoutURI), c.BackChannelLogoutSessionRequired,
-		durationToInterval(c.AccessTokenTTL), durationToInterval(c.RefreshTokenTTL), durationToInterval(c.IDTokenTTL),
+	tag, err := r.db.Conn(ctx).Exec(
+		ctx,
+		q,
+		nullableStr(c.ClientSecretHash),
+		c.Name,
+		nullableStr(c.Description),
+		string(c.ClientType),
+		domain.GrantTypesToStrings(c.GrantTypes),
+		c.ResponseTypes,
+		c.RedirectURIs,
+		c.AllowedCORSOrigins,
+		c.AllowedScopes,
+		c.DefaultScopes,
+		c.Audience,
+		string(c.TokenEndpointAuthMethod),
+		nullableStr(c.TokenEndpointAuthSigningAlg),
+		c.RequirePKCE,
+		string(c.SubjectType),
+		nullableStr(c.SectorIdentifierURI),
+		c.IDTokenSignedAlg,
+		c.UserinfoSignedAlg,
+		c.PostLogoutURIs,
+		nullableStr(c.FrontChannelLogoutURI),
+		c.FrontChannelLogoutSessionRequired,
+		nullableStr(c.BackChannelLogoutURI),
+		c.BackChannelLogoutSessionRequired,
+		durationToInterval(c.AccessTokenTTL),
+		durationToInterval(c.RefreshTokenTTL),
+		durationToInterval(c.IDTokenTTL),
 		c.SkipConsent,
-		nullableStr(c.LogoURI), nullableStr(c.ClientURI), nullableStr(c.PolicyURI), nullableStr(c.TosURI), c.Contacts, meta,
-		c.Protocols, jwks, nullableStr(c.JWKSURI),
-		nullableStr(c.RegistrationAccessTokenHash), c.IsDynamic,
+		nullableStr(c.LogoURI),
+		nullableStr(c.ClientURI),
+		nullableStr(c.PolicyURI),
+		nullableStr(c.TosURI),
+		c.Contacts,
+		meta,
+		c.Protocols,
+		jwks,
+		nullableStr(c.JWKSURI),
+		nullableStr(c.RegistrationAccessTokenHash),
+		c.IsDynamic,
 		c.ID,
 	)
 	if err != nil {
@@ -254,8 +412,12 @@ func (r *ClientRepository) Update(ctx context.Context, c *domain.Client) error {
 }
 
 func (r *ClientRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	const q = `UPDATE clients SET deleted_at = now(), updated_at = now()
-	           WHERE id = $1 AND deleted_at IS NULL`
+	const q = `
+		UPDATE clients
+		SET deleted_at = now(),
+		    updated_at = now()
+		WHERE id = $1
+		  AND deleted_at IS NULL`
 	tag, err := r.db.Conn(ctx).Exec(ctx, q, id)
 	if err != nil {
 		return fmt.Errorf("delete client: %w", err)
@@ -305,19 +467,50 @@ func scanClient(row scanner) (*domain.Client, error) {
 	)
 
 	err := row.Scan(
-		&id, &tenantID, &clientID, &secretHash, &name, &desc,
-		&clientType, &grantTypes, &responseTypes, &redirectURIs, &corsOrigins,
-		&allowedScopes, &defaultScopes, &audience,
-		&authMethod, &authSigningAlg, &requirePKCE,
-		&subjectType, &sectorURI, &idTokenAlg, &uiAlg,
-		&postLogoutURIs, &fcLogoutURI, &fcLogoutSession,
-		&bcLogoutURI, &bcLogoutSess,
-		&accessTTL, &refreshTTL, &idTTL,
+		&id,
+		&tenantID,
+		&clientID,
+		&secretHash,
+		&name,
+		&desc,
+		&clientType,
+		&grantTypes,
+		&responseTypes,
+		&redirectURIs,
+		&corsOrigins,
+		&allowedScopes,
+		&defaultScopes,
+		&audience,
+		&authMethod,
+		&authSigningAlg,
+		&requirePKCE,
+		&subjectType,
+		&sectorURI,
+		&idTokenAlg,
+		&uiAlg,
+		&postLogoutURIs,
+		&fcLogoutURI,
+		&fcLogoutSession,
+		&bcLogoutURI,
+		&bcLogoutSess,
+		&accessTTL,
+		&refreshTTL,
+		&idTTL,
 		&skipConsent,
-		&logoURI, &clientURI, &policyURI, &tosURI, &contacts, &metaRaw,
-		&protocols, &jwksRaw, &jwksURI,
-		&regAccessTokenHash, &isDynamic,
-		&createdAt, &updatedAt, &deletedAt,
+		&logoURI,
+		&clientURI,
+		&policyURI,
+		&tosURI,
+		&contacts,
+		&metaRaw,
+		&protocols,
+		&jwksRaw,
+		&jwksURI,
+		&regAccessTokenHash,
+		&isDynamic,
+		&createdAt,
+		&updatedAt,
+		&deletedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -340,7 +533,7 @@ func scanClient(row scanner) (*domain.Client, error) {
 		Name:                              name,
 		Description:                       desc.String,
 		ClientType:                        domain.ClientType(clientType),
-		GrantTypes:                        stringsToGrantTypes(grantTypes),
+		GrantTypes:                        domain.GrantTypesFromStrings(grantTypes),
 		ResponseTypes:                     responseTypes,
 		RedirectURIs:                      redirectURIs,
 		AllowedCORSOrigins:                corsOrigins,

@@ -75,3 +75,16 @@ func TestHasScope(t *testing.T) {
 		t.Fatalf("HasScope(%q) = true, want false; scopes=%v", "email", c.AllowedScopes)
 	}
 }
+
+func TestGrantTypeStringHelpers(t *testing.T) {
+	t.Parallel()
+	ss := []string{"authorization_code", "refresh_token"}
+	gs := GrantTypesFromStrings(ss)
+	if gs[0] != GrantTypeAuthorizationCode {
+		t.Fatalf("GrantTypesFromStrings(...)[0] = %q, want %q", gs[0], GrantTypeAuthorizationCode)
+	}
+	back := GrantTypesToStrings(gs)
+	if back[1] != "refresh_token" {
+		t.Fatalf("GrantTypesToStrings(...)[1] = %q, want %q", back[1], "refresh_token")
+	}
+}

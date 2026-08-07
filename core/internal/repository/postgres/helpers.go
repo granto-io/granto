@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/granto-io/granto/core/internal/domain"
 )
 
 func intervalToDuration(iv pgtype.Interval) *time.Duration {
@@ -31,22 +29,6 @@ func nullableStr(s string) *string {
 		return nil
 	}
 	return &s
-}
-
-func stringsToGrantTypes(ss []string) []domain.GrantType {
-	out := make([]domain.GrantType, len(ss))
-	for i, s := range ss {
-		out[i] = domain.GrantType(s)
-	}
-	return out
-}
-
-func grantTypesToStrings(gs []domain.GrantType) []string {
-	out := make([]string, len(gs))
-	for i, g := range gs {
-		out[i] = string(g)
-	}
-	return out
 }
 
 func marshalJSONMap(m map[string]any) ([]byte, error) {

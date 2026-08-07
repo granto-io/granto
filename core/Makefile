@@ -27,6 +27,16 @@ generate-proto: ## Regenerate admin gRPC / gateway (api/admin → gen/admin)
 test: ## Run unit tests
 	go test ./... -count=1 -timeout 60s
 
+GOLANGCI_LINT_VERSION ?= v2.12.2
+GOLANGCI_LINT ?= $(CURDIR)/bin/golangci-lint
+
+.PHONY: lint
+lint: $(GOLANGCI_LINT) ## Run golangci-lint (standard defaults)
+	$(GOLANGCI_LINT) run ./...
+
+$(GOLANGCI_LINT):
+	GOBIN=$(CURDIR)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+
 .PHONY: build
 build: ## Build granto-core binary
 	go build -o bin/granto-core ./cmd

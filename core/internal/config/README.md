@@ -120,9 +120,8 @@ Admin API access (MVP: static bearer; production may move to mTLS / OAuth).
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `token` | *(required)* | Bearer token for Admin API |
-| `allowed_ips` | empty | Optional IP allow-list |
 
-Env: `GRANTO_ADMIN_TOKEN`. Prefer env in production.
+Env: `GRANTO_ADMIN_TOKEN`. Prefer env in production. IP allow-listing is out of MVP (network / reverse-proxy concern for now).
 
 ### `cors`
 
