@@ -12,7 +12,7 @@ This package only defines providers and injectors. Process lifecycle
 | `config.go` | `*config.Config` from injector param `ConfigPath` |
 | `logger.go` | Process logger (`slog`) |
 | `public_http.go` | Public HTTP handler (OAuth2 / OIDC / GNAP) |
-| `postgres.go` | `*postgres.DB` (migrate + pool), `ClientRepository` (needs Config) |
+| `postgres.go` | `*postgres.DB` (migrate + pool), `ClientRepository`, `LoginSessionRepository` (needs Config) |
 | `admin.go` | Admin gRPC `ClientServer` + `admin.Server` (gRPC + gateway) |
 | `app.go` | Composed `AppSet` (`App.Run` — lifecycle outside Wire) |
 | `wire.go` | `InitializeApp(ConfigPath)` injector (wireinject) |
