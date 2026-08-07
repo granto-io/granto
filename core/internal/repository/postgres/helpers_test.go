@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/granto-io/granto/core/internal/domain"
 )
 
 func TestIntervalDurationRoundTrip(t *testing.T) {
@@ -149,17 +147,4 @@ func TestJSONMapHelpers(t *testing.T) {
 			t.Fatalf("unmarshalJSONMap(invalid) = nil error, want parse error")
 		}
 	})
-}
-
-func TestGrantTypeHelpers(t *testing.T) {
-	t.Parallel()
-	ss := []string{"authorization_code", "refresh_token"}
-	gs := stringsToGrantTypes(ss)
-	if gs[0] != domain.GrantTypeAuthorizationCode {
-		t.Fatalf("stringsToGrantTypes(...)[0] = %q, want %q", gs[0], domain.GrantTypeAuthorizationCode)
-	}
-	back := grantTypesToStrings(gs)
-	if back[1] != "refresh_token" {
-		t.Fatalf("grantTypesToStrings(...)[1] = %q, want %q", back[1], "refresh_token")
-	}
 }

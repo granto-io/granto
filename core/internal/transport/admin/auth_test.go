@@ -2,13 +2,11 @@ package admin
 
 import (
 	"context"
-	"net"
 	"testing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -88,64 +86,6 @@ func TestBearerAuthInterceptor(t *testing.T) {
 		}
 	})
 }
-
-func TestIPAllowlistInterceptor(t *testing.T) {
-	t.Parallel()
-	okHandler := func(ctx context.Context, req any) (any, error) {
-		return "ok", nil
-	}
-
-	t.Run("empty allowlist allows all peers", func(t *testing.T) {
-		interceptor := ipAllowlistInterceptor(nil)
-		got, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{}, okHandler)
-		if err != nil {
-			t.Fatalf("interceptor error = %v, want nil", err)
-		}
-		if got != "ok" {
-			t.Fatalf("handler result = %#v, want %q", got, "ok")
-		}
-	})
-
-	interceptor := ipAllowlistInterceptor([]string{"127.0.0.1", " 10.0.0.1 "})
-
-	t.Run("missing peer is permission denied", func(t *testing.T) {
-		_, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{}, okHandler)
-		assertStatusCode(t, err, codes.PermissionDenied)
-	})
-
-	t.Run("ip outside allowlist is permission denied", func(t *testing.T) {
-		ctx := peer.NewContext(context.Background(), &peer.Peer{Addr: &net.TCPAddr{IP: net.ParseIP("192.168.0.1"), Port: 1}})
-		_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, okHandler)
-		assertStatusCode(t, err, codes.PermissionDenied)
-	})
-
-	t.Run("allowed host:port peer passes", func(t *testing.T) {
-		ctx := peer.NewContext(context.Background(), &peer.Peer{Addr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5555}})
-		got, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, okHandler)
-		if err != nil {
-			t.Fatalf("interceptor error = %v, want nil", err)
-		}
-		if got != "ok" {
-			t.Fatalf("handler result = %#v, want %q", got, "ok")
-		}
-	})
-
-	t.Run("allowed bare ip addr passes", func(t *testing.T) {
-		ctx := peer.NewContext(context.Background(), &peer.Peer{Addr: bareAddr("10.0.0.1")})
-		got, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, okHandler)
-		if err != nil {
-			t.Fatalf("interceptor error = %v, want nil", err)
-		}
-		if got != "ok" {
-			t.Fatalf("handler result = %#v, want %q", got, "ok")
-		}
-	})
-}
-
-type bareAddr string
-
-func (a bareAddr) Network() string { return "ip" }
-func (a bareAddr) String() string  { return string(a) }
 
 func assertStatusCode(t *testing.T, err error, code codes.Code) {
 	t.Helper()

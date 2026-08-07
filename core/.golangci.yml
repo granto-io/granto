@@ -1,0 +1,10 @@
+# Standard golangci-lint defaults (v2 schema).
+# See https://golangci-lint.run/docs/linters/
+version: "2"
+
+linters:
+  default: standard
+
+formatters:
+  enable:
+    - gofmt

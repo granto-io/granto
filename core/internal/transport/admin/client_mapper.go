@@ -68,7 +68,7 @@ func applyClientBody(c *domain.Client, in clientBody) error {
 		c.ClientType = ct
 	}
 
-	c.GrantTypes = stringsToGrantTypes(in.GetGrantTypes())
+	c.GrantTypes = domain.GrantTypesFromStrings(in.GetGrantTypes())
 	c.ResponseTypes = in.GetResponseTypes()
 	c.RedirectURIs = in.GetRedirectUris()
 	c.AllowedCORSOrigins = in.GetAllowedCorsOrigins()
@@ -167,7 +167,7 @@ func clientToProto(c *domain.Client) *adminv1.Client {
 		Name:                              c.Name,
 		Description:                       c.Description,
 		ClientType:                        string(c.ClientType),
-		GrantTypes:                        grantTypesToStrings(c.GrantTypes),
+		GrantTypes:                        domain.GrantTypesToStrings(c.GrantTypes),
 		ResponseTypes:                     c.ResponseTypes,
 		RedirectUris:                      c.RedirectURIs,
 		AllowedCorsOrigins:                c.AllowedCORSOrigins,
@@ -229,22 +229,6 @@ func secondsToDuration(s int32) *time.Duration {
 	}
 	d := time.Duration(s) * time.Second
 	return &d
-}
-
-func grantTypesToStrings(gs []domain.GrantType) []string {
-	out := make([]string, len(gs))
-	for i, g := range gs {
-		out[i] = string(g)
-	}
-	return out
-}
-
-func stringsToGrantTypes(ss []string) []domain.GrantType {
-	out := make([]domain.GrantType, len(ss))
-	for i, s := range ss {
-		out[i] = domain.GrantType(s)
-	}
-	return out
 }
 
 func mapToStructpb(m map[string]any) *structpb.Struct {

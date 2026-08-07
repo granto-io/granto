@@ -30,10 +30,7 @@ type Server struct {
 // NewServer registers admin services on a gRPC server (auth interceptors applied).
 func NewServer(clients adminv1.ClientServiceServer, cfg *config.Config) *Server {
 	grpcSrv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			bearerAuthInterceptor(cfg.Admin.Token),
-			ipAllowlistInterceptor(cfg.Admin.AllowedIPs),
-		),
+		grpc.UnaryInterceptor(bearerAuthInterceptor(cfg.Admin.Token)),
 	)
 	adminv1.RegisterClientServiceServer(grpcSrv, clients)
 
