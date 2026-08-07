@@ -44,9 +44,11 @@ make generate          # all generators
 make generate-wire     # Google Wire only
 make generate-proto    # admin: api/admin → gen/admin (buf)
 make lint              # golangci-lint (standard defaults)
+make lint-fix         # gofmt + auto-fixable lint fixes
+make install-hooks     # once per clone: pre-commit runs make lint
 ```
 
-Requires [buf](https://buf.build/docs/installation) for proto. Lint: [golangci-lint](https://golangci-lint.run/docs/welcome/install/) v2 (`make lint` installs into `core/bin/` if missing). Equivalent: `buf generate` / `golangci-lint run ./...` from `core/`.
+Requires [buf](https://buf.build/docs/installation) for proto. Lint: [golangci-lint](https://golangci-lint.run/docs/welcome/install/) v2 (`make lint` installs into `core/bin/` if missing). After `make install-hooks`, commits with staged `.go` files run `make lint`. Equivalent: `buf generate` / `golangci-lint run ./...` from `core/`.
 
 See `core/internal/di/README.md`, `core/api/public/README.md`, and `core/api/admin/README.md`.
 

@@ -28,6 +28,16 @@ test: ## Test core
 lint: ## Lint core (golangci-lint)
 	$(MAKE) -C core lint
 
+.PHONY: lint-fix
+lint-fix: ## Format + auto-fix core lint issues
+	$(MAKE) -C core lint-fix
+
+.PHONY: install-hooks
+install-hooks: ## Enable repo git hooks (.githooks/pre-commit → lint)
+	git config core.hooksPath .githooks
+	@chmod +x .githooks/pre-commit
+	@echo "core.hooksPath=.githooks (pre-commit runs make lint on staged .go)"
+
 .PHONY: build
 build: ## Build core
 	$(MAKE) -C core build

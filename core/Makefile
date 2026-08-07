@@ -34,6 +34,11 @@ GOLANGCI_LINT ?= $(CURDIR)/bin/golangci-lint
 lint: $(GOLANGCI_LINT) ## Run golangci-lint (standard defaults)
 	$(GOLANGCI_LINT) run ./...
 
+.PHONY: lint-fix
+lint-fix: $(GOLANGCI_LINT) ## Format + apply auto-fixes (gofmt / fixable linters)
+	$(GOLANGCI_LINT) fmt ./...
+	$(GOLANGCI_LINT) run --fix ./...
+
 $(GOLANGCI_LINT):
 	GOBIN=$(CURDIR)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
