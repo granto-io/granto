@@ -9,6 +9,7 @@ package di
 import (
 	"github.com/granto-io/granto/core/internal/app"
 	"github.com/granto-io/granto/core/internal/repository/postgres"
+	"github.com/granto-io/granto/core/internal/repository/redis"
 	"github.com/granto-io/granto/core/internal/transport/admin"
 	"github.com/granto-io/granto/core/internal/transport/public"
 )
@@ -29,9 +30,15 @@ func InitializeApp(configPath ConfigPath) (*app.App, error) {
 	if err != nil {
 		return nil, err
 	}
+	client, err := provideRedis(config)
+	if err != nil {
+		return nil, err
+	}
+	loginSessionRepository := postgres.NewLoginSessionRepository(db)
+	loginChallengeRepository := redis.NewLoginChallengeRepository(client)
 	clientRepository := postgres.NewClientRepository(db)
 	clientServer := admin.NewClientServer(clientRepository)
 	server := admin.NewServer(clientServer, config)
-	appApp := app.NewApp(config, logger, httpHandler, db, server)
+	appApp := app.NewApp(config, logger, httpHandler, db, client, loginSessionRepository, loginChallengeRepository, server)
 	return appApp, nil
 }

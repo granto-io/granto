@@ -12,17 +12,22 @@ import (
 
 	"github.com/granto-io/granto/core/internal/config"
 	"github.com/granto-io/granto/core/internal/postgres"
+	"github.com/granto-io/granto/core/internal/redis"
+	"github.com/granto-io/granto/core/internal/repository"
 	"github.com/granto-io/granto/core/internal/transport/admin"
 )
 
 // App holds process-level dependencies constructed by the DI graph.
 // Lifecycle methods (Run) live here; Wire only builds the graph.
 type App struct {
-	Config *config.Config
-	Logger *slog.Logger
-	Public http.Handler
-	DB     *postgres.DB
-	Admin  *admin.Server
+	Config          *config.Config
+	Logger          *slog.Logger
+	Public          http.Handler
+	DB              *postgres.DB
+	Redis           *redis.Client
+	LoginSessions   repository.LoginSessionRepository
+	LoginChallenges repository.LoginChallengeRepository
+	Admin           *admin.Server
 
 	publicHTTP *http.Server
 }
@@ -33,14 +38,20 @@ func NewApp(
 	logger *slog.Logger,
 	public http.Handler,
 	db *postgres.DB,
+	rdb *redis.Client,
+	loginSessions repository.LoginSessionRepository,
+	loginChallenges repository.LoginChallengeRepository,
 	adminSrv *admin.Server,
 ) *App {
 	return &App{
-		Config: cfg,
-		Logger: logger,
-		Public: public,
-		DB:     db,
-		Admin:  adminSrv,
+		Config:          cfg,
+		Logger:          logger,
+		Public:          public,
+		DB:              db,
+		Redis:           rdb,
+		LoginSessions:   loginSessions,
+		LoginChallenges: loginChallenges,
+		Admin:           adminSrv,
 	}
 }
 
@@ -114,6 +125,16 @@ func (a *App) Run(ctx context.Context) error {
 		if a.DB != nil {
 			a.DB.Close()
 			a.Logger.Info("postgres pool closed")
+		}
+		if a.Redis != nil {
+			if err := a.Redis.Close(); err != nil {
+				a.Logger.Error("redis close", "error", err)
+				if firstErr == nil {
+					firstErr = err
+				}
+			} else {
+				a.Logger.Info("redis client closed")
+			}
 		}
 
 		return firstErr

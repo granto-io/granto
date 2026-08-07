@@ -13,6 +13,7 @@ This package only defines providers and injectors. Process lifecycle
 | `logger.go` | Process logger (`slog`) |
 | `public_http.go` | Public HTTP handler (OAuth2 / OIDC / GNAP) |
 | `postgres.go` | `*postgres.DB` (migrate + pool), `ClientRepository`, `LoginSessionRepository` (needs Config) |
+| `redis.go` | `*redis.Client`, `LoginChallengeRepository` |
 | `admin.go` | Admin gRPC `ClientServer` + `admin.Server` (gRPC + gateway) |
 | `app.go` | Composed `AppSet` (`App.Run` — lifecycle outside Wire) |
 | `wire.go` | `InitializeApp(ConfigPath)` injector (wireinject) |
