@@ -69,9 +69,15 @@ func (a *App) Run(ctx context.Context) error {
 		return nil
 	})
 
+	// Bind gRPC before starting the gateway so dials do not race Listen.
+	grpcLis, err := a.Admin.ListenGRPC(a.Config.Server.AdminGRPCAddr)
+	if err != nil {
+		return fmt.Errorf("admin gRPC: %w", err)
+	}
+
 	g.Go(func() error {
 		a.Logger.Info("admin gRPC listening", "addr", a.Config.Server.AdminGRPCAddr)
-		if err := a.Admin.RunGRPC(a.Config.Server.AdminGRPCAddr); err != nil {
+		if err := a.Admin.ServeGRPC(grpcLis); err != nil {
 			return fmt.Errorf("admin gRPC: %w", err)
 		}
 		return nil
