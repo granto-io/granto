@@ -3,7 +3,6 @@ package di
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/google/wire"
 
@@ -13,22 +12,13 @@ import (
 	repopg "github.com/granto-io/granto/core/internal/repository/postgres"
 )
 
-// PostgresSet provides config, DB (pool + migrations), and postgres-backed repositories.
+// PostgresSet provides DB (pool + optional migrate) and postgres-backed repositories.
+// Requires *config.Config from ConfigSet.
 var PostgresSet = wire.NewSet(
-	provideConfig,
 	provideDB,
 	repopg.NewClientRepository,
 	wire.Bind(new(repository.ClientRepository), new(*repopg.ClientRepository)),
 )
-
-func provideConfig() (*config.Config, error) {
-	path := os.Getenv("GRANTO_CONFIG")
-	cfg, err := config.Load(path)
-	if err != nil {
-		return nil, fmt.Errorf("config: %w", err)
-	}
-	return cfg, nil
-}
 
 func provideDB(cfg *config.Config) (*postgres.DB, error) {
 	if cfg.Postgres.MigrateOnStart {

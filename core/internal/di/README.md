@@ -9,16 +9,21 @@ This package only defines providers and injectors. Process lifecycle
 
 | File | Provides |
 |------|----------|
+| `config.go` | `*config.Config` from injector param `ConfigPath` |
 | `logger.go` | Process logger (`slog`) |
 | `public_http.go` | Public HTTP handler (OAuth2 / OIDC / GNAP) |
-| `postgres.go` | Config, `*postgres.DB` (migrate + pool), `ClientRepository` |
-| `app.go` | Composed `AppSet` |
-| `wire.go` | `InitializeApp` injector (wireinject) |
+| `postgres.go` | `*postgres.DB` (migrate + pool), `ClientRepository` (needs Config) |
+| `admin.go` | Admin gRPC `ClientServer` + `admin.Server` (gRPC + gateway) |
+| `app.go` | Composed `AppSet` (`App.Run` — lifecycle outside Wire) |
+| `wire.go` | `InitializeApp(ConfigPath)` injector (wireinject) |
+
+`ConfigPath` is supplied by `main` (`-config` flag or `GRANTO_CONFIG`). Providers receive `*config.Config` as a normal dependency.
 
 ## Regenerate
 
 ```bash
 go generate ./internal/di
+# or: make generate-wire
 ```
 
 (`//go:generate` lives in `generate.go` so it runs without the `wireinject` build tag.)

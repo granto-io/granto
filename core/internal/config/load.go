@@ -67,6 +67,11 @@ func defaults() *Config {
 			DefaultTTL: 24 * time.Hour,
 			MaxTTL:     720 * time.Hour,
 		},
+		OIDC: OIDCConfig{
+			DynamicClientRegistration: DynamicClientRegistrationConfig{
+				Enabled: false,
+			},
+		},
 		CORS: CORSConfig{
 			Enabled:        false,
 			AllowedMethods: []string{"GET", "POST", "OPTIONS"},
@@ -135,6 +140,12 @@ func overrideFromEnv(cfg *Config) {
 	}
 	if v := os.Getenv("GRANTO_CORS_ORIGINS"); v != "" {
 		cfg.CORS.AllowedOrigins = splitComma(v)
+	}
+	if v := os.Getenv("GRANTO_OIDC_DCR_ENABLED"); v != "" {
+		cfg.OIDC.DynamicClientRegistration.Enabled = v == "true" || v == "1"
+	}
+	if v := os.Getenv("GRANTO_OIDC_DCR_DEFAULT_SCOPES"); v != "" {
+		cfg.OIDC.DynamicClientRegistration.DefaultScopes = splitComma(v)
 	}
 }
 

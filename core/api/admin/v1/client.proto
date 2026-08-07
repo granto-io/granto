@@ -1,0 +1,242 @@
+syntax = "proto3";
+
+package granto.admin.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/granto-io/granto/core/gen/admin/v1;adminv1";
+
+// ClientService is the Admin API for OAuth2 / OIDC / GNAP client registrations.
+// Public Dynamic Client Registration (RFC 7591) is a separate public surface
+// gated by oidc.dynamic_client_registration.enabled — not this service.
+service ClientService {
+  rpc CreateClient(CreateClientRequest) returns (CreateClientResponse) {
+    option (google.api.http) = {
+      post: "/admin/v1/clients"
+      body: "*"
+    };
+  }
+
+  rpc GetClient(GetClientRequest) returns (GetClientResponse) {
+    option (google.api.http) = {
+      get: "/admin/v1/clients/{id}"
+    };
+  }
+
+  rpc ListClients(ListClientsRequest) returns (ListClientsResponse) {
+    option (google.api.http) = {
+      get: "/admin/v1/clients"
+    };
+  }
+
+  rpc UpdateClient(UpdateClientRequest) returns (UpdateClientResponse) {
+    option (google.api.http) = {
+      put: "/admin/v1/clients/{id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteClient(DeleteClientRequest) returns (DeleteClientResponse) {
+    option (google.api.http) = {
+      delete: "/admin/v1/clients/{id}"
+    };
+  }
+}
+
+// Client is the admin representation of a registered client (see domain.Client).
+message Client {
+  string id = 1;
+  string tenant_id = 2;
+  string client_id = 3;
+  string name = 4;
+  string description = 5;
+  // confidential | public | trusted
+  string client_type = 6;
+
+  repeated string grant_types = 7;
+  repeated string response_types = 8;
+  repeated string redirect_uris = 9;
+  repeated string allowed_cors_origins = 10;
+  repeated string allowed_scopes = 11;
+  repeated string default_scopes = 12;
+  repeated string audience = 13;
+
+  string token_endpoint_auth_method = 14;
+  string token_endpoint_auth_signing_alg = 15;
+  bool require_pkce = 16;
+
+  string subject_type = 17;
+  string sector_identifier_uri = 18;
+  string id_token_signed_alg = 19;
+  string userinfo_signed_alg = 20;
+
+  repeated string post_logout_uris = 21;
+  string frontchannel_logout_uri = 22;
+  bool frontchannel_logout_session_required = 23;
+  string backchannel_logout_uri = 24;
+  bool backchannel_logout_session_required = 25;
+
+  // TTL overrides in seconds; 0 / unset means server default.
+  int32 access_token_ttl_seconds = 26;
+  int32 refresh_token_ttl_seconds = 27;
+  int32 id_token_ttl_seconds = 28;
+
+  bool skip_consent = 29;
+
+  string logo_uri = 30;
+  string client_uri = 31;
+  string policy_uri = 32;
+  string tos_uri = 33;
+  repeated string contacts = 34;
+  google.protobuf.Struct metadata = 35;
+
+  repeated string protocols = 36;
+  string jwks_uri = 37;
+  // Inline JWKS as JSON object when present.
+  google.protobuf.Struct jwks = 38;
+
+  bool is_dynamic = 39;
+
+  google.protobuf.Timestamp created_at = 40;
+  google.protobuf.Timestamp updated_at = 41;
+}
+
+message CreateClientRequest {
+  string tenant_id = 1;
+  // Optional; generated when empty.
+  string client_id = 2;
+  string name = 3;
+  string description = 4;
+  string client_type = 5;
+
+  repeated string grant_types = 6;
+  repeated string response_types = 7;
+  repeated string redirect_uris = 8;
+  repeated string allowed_cors_origins = 9;
+  repeated string allowed_scopes = 10;
+  repeated string default_scopes = 11;
+  repeated string audience = 12;
+
+  string token_endpoint_auth_method = 13;
+  string token_endpoint_auth_signing_alg = 14;
+  bool require_pkce = 15;
+
+  string subject_type = 16;
+  string sector_identifier_uri = 17;
+  string id_token_signed_alg = 18;
+  string userinfo_signed_alg = 19;
+
+  repeated string post_logout_uris = 20;
+  string frontchannel_logout_uri = 21;
+  bool frontchannel_logout_session_required = 22;
+  string backchannel_logout_uri = 23;
+  bool backchannel_logout_session_required = 24;
+
+  int32 access_token_ttl_seconds = 25;
+  int32 refresh_token_ttl_seconds = 26;
+  int32 id_token_ttl_seconds = 27;
+
+  bool skip_consent = 28;
+
+  string logo_uri = 29;
+  string client_uri = 30;
+  string policy_uri = 31;
+  string tos_uri = 32;
+  repeated string contacts = 33;
+  google.protobuf.Struct metadata = 34;
+
+  repeated string protocols = 35;
+  string jwks_uri = 36;
+  google.protobuf.Struct jwks = 37;
+
+  // Optional plaintext secret for confidential clients; generated when empty.
+  string client_secret = 38;
+}
+
+message CreateClientResponse {
+  Client client = 1;
+  // Returned ONLY on create (and rotate); never stored or listed again.
+  string client_secret = 2;
+}
+
+message GetClientRequest {
+  // Internal UUID (clients.id).
+  string id = 1;
+}
+
+message GetClientResponse {
+  Client client = 1;
+}
+
+message ListClientsRequest {
+  string tenant_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  string search = 4;
+}
+
+message ListClientsResponse {
+  repeated Client clients = 1;
+}
+
+message UpdateClientRequest {
+  // Internal UUID (clients.id); also from URL path.
+  string id = 1;
+
+  string name = 2;
+  string description = 3;
+  string client_type = 4;
+
+  repeated string grant_types = 5;
+  repeated string response_types = 6;
+  repeated string redirect_uris = 7;
+  repeated string allowed_cors_origins = 8;
+  repeated string allowed_scopes = 9;
+  repeated string default_scopes = 10;
+  repeated string audience = 11;
+
+  string token_endpoint_auth_method = 12;
+  string token_endpoint_auth_signing_alg = 13;
+  bool require_pkce = 14;
+
+  string subject_type = 15;
+  string sector_identifier_uri = 16;
+  string id_token_signed_alg = 17;
+  string userinfo_signed_alg = 18;
+
+  repeated string post_logout_uris = 19;
+  string frontchannel_logout_uri = 20;
+  bool frontchannel_logout_session_required = 21;
+  string backchannel_logout_uri = 22;
+  bool backchannel_logout_session_required = 23;
+
+  int32 access_token_ttl_seconds = 24;
+  int32 refresh_token_ttl_seconds = 25;
+  int32 id_token_ttl_seconds = 26;
+
+  bool skip_consent = 27;
+
+  string logo_uri = 28;
+  string client_uri = 29;
+  string policy_uri = 30;
+  string tos_uri = 31;
+  repeated string contacts = 32;
+  google.protobuf.Struct metadata = 33;
+
+  repeated string protocols = 34;
+  string jwks_uri = 35;
+  google.protobuf.Struct jwks = 36;
+}
+
+message UpdateClientResponse {
+  Client client = 1;
+}
+
+message DeleteClientRequest {
+  // Internal UUID (clients.id).
+  string id = 1;
+}
+
+message DeleteClientResponse {}

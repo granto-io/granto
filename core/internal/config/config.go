@@ -74,7 +74,19 @@ type OAuth2Config struct {
 
 // OIDCConfig holds OIDC-specific knobs.
 type OIDCConfig struct {
-	ExtraScopes []string `yaml:"extra_scopes"`
+	ExtraScopes                 []string                          `yaml:"extra_scopes"`
+	DynamicClientRegistration   DynamicClientRegistrationConfig   `yaml:"dynamic_client_registration"`
+}
+
+// DynamicClientRegistrationConfig controls public OIDC Dynamic Client Registration
+// (RFC 7591 / OIDC Discovery) at /oauth2/register.
+//
+// When Enabled is false (default), the public registration endpoints must not
+// accept registrations — same idea as Hydra's
+// oidc.dynamic_client_registration.enabled.
+type DynamicClientRegistrationConfig struct {
+	Enabled       bool     `yaml:"enabled"`
+	DefaultScopes []string `yaml:"default_scopes"`
 }
 
 // AdminConfig holds Admin API access settings (MVP: static bearer).

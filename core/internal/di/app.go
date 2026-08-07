@@ -8,8 +8,10 @@ import (
 
 // AppSet is the full core application graph.
 var AppSet = wire.NewSet(
+	ConfigSet,
 	LoggerSet,
 	PublicHTTPSet,
 	PostgresSet,
+	AdminSet,
 	app.NewApp,
 )

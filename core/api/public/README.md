@@ -46,6 +46,7 @@ OAuth/OIDC paths follow common AS practice. GNAP paths are **Granto’s concrete
 |--------|------|------|
 | `GET` / `POST` | `/userinfo` | OIDC Core — UserInfo |
 | `GET` | `/oauth2/logout` | RP-Initiated Logout |
+| `POST` / `GET` / `PUT` / `DELETE` | `/oauth2/register`… | OIDC Dynamic Client Registration (RFC 7591) — **only when** `oidc.dynamic_client_registration.enabled` is `true` (default: off). Admin client CRUD stays on Admin API. |
 
 ### GNAP ([RFC 9635](https://www.rfc-editor.org/rfc/rfc9635.html))
 
