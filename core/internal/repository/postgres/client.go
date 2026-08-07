@@ -272,36 +272,36 @@ type scanner interface {
 
 func scanClient(row scanner) (*domain.Client, error) {
 	var (
-		id, tenantID                   uuid.UUID
-		clientID, name                 string
-		secretHash, desc               pgtype.Text
-		clientType                     string
-		grantTypes, responseTypes      []string
-		redirectURIs, corsOrigins      []string
-		allowedScopes, defaultScopes   []string
-		audience                       []string
-		authMethod                     string
-		authSigningAlg                 pgtype.Text
-		requirePKCE                    bool
-		subjectType                    string
-		sectorURI                      pgtype.Text
-		idTokenAlg, uiAlg              string
-		postLogoutURIs                 []string
-		fcLogoutURI, bcLogoutURI       pgtype.Text
-		fcLogoutSession, bcLogoutSess  bool
-		accessTTL, refreshTTL, idTTL   pgtype.Interval
-		skipConsent                    bool
-		logoURI, clientURI             pgtype.Text
-		policyURI, tosURI              pgtype.Text
-		contacts                       []string
-		metaRaw                        []byte
-		protocols                      []string
-		jwksRaw                        []byte
-		jwksURI                        pgtype.Text
-		regAccessTokenHash             pgtype.Text
-		isDynamic                      bool
-		createdAt, updatedAt           time.Time
-		deletedAt                      *time.Time
+		id, tenantID                  uuid.UUID
+		clientID, name                string
+		secretHash, desc              pgtype.Text
+		clientType                    string
+		grantTypes, responseTypes     []string
+		redirectURIs, corsOrigins     []string
+		allowedScopes, defaultScopes  []string
+		audience                      []string
+		authMethod                    string
+		authSigningAlg                pgtype.Text
+		requirePKCE                   bool
+		subjectType                   string
+		sectorURI                     pgtype.Text
+		idTokenAlg, uiAlg             string
+		postLogoutURIs                []string
+		fcLogoutURI, bcLogoutURI      pgtype.Text
+		fcLogoutSession, bcLogoutSess bool
+		accessTTL, refreshTTL, idTTL  pgtype.Interval
+		skipConsent                   bool
+		logoURI, clientURI            pgtype.Text
+		policyURI, tosURI             pgtype.Text
+		contacts                      []string
+		metaRaw                       []byte
+		protocols                     []string
+		jwksRaw                       []byte
+		jwksURI                       pgtype.Text
+		regAccessTokenHash            pgtype.Text
+		isDynamic                     bool
+		createdAt, updatedAt          time.Time
+		deletedAt                     *time.Time
 	)
 
 	err := row.Scan(

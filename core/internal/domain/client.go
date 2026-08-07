@@ -53,11 +53,11 @@ type Client struct {
 	IDTokenSignedAlg    string
 	UserinfoSignedAlg   string
 
-	PostLogoutURIs                     []string
-	FrontChannelLogoutURI              string
-	FrontChannelLogoutSessionRequired  bool
-	BackChannelLogoutURI               string
-	BackChannelLogoutSessionRequired   bool
+	PostLogoutURIs                    []string
+	FrontChannelLogoutURI             string
+	FrontChannelLogoutSessionRequired bool
+	BackChannelLogoutURI              string
+	BackChannelLogoutSessionRequired  bool
 
 	AccessTokenTTL  *time.Duration
 	RefreshTokenTTL *time.Duration
