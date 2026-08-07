@@ -9,7 +9,8 @@ import (
 )
 
 // InitializeApp builds the core application graph.
-func InitializeApp() (*app.App, error) {
+// configPath is resolved at the process edge (CLI flag / env), not inside providers.
+func InitializeApp(configPath ConfigPath) (*app.App, error) {
 	wire.Build(AppSet)
 	return nil, nil
 }

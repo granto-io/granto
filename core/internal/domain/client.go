@@ -76,6 +76,12 @@ type Client struct {
 	JWKS      map[string]any
 	JWKSURI   string
 
+	// Dynamic Client Registration (RFC 7591). Plain registration_access_token
+	// is never stored — only its hash. registration_client_uri is derived at
+	// response time, not persisted.
+	RegistrationAccessTokenHash string
+	IsDynamic                   bool
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time

@@ -27,6 +27,7 @@ const clientColumns = `
 	skip_consent,
 	logo_uri, client_uri, policy_uri, tos_uri, contacts, metadata,
 	protocols, jwks, jwks_uri,
+	registration_access_token_hash, is_dynamic,
 	created_at, updated_at, deleted_at`
 
 // ClientRepository is the PostgreSQL implementation of repository.ClientRepository.
@@ -38,8 +39,6 @@ type ClientRepository struct {
 func NewClientRepository(db *postgres.DB) *ClientRepository {
 	return &ClientRepository{db: db}
 }
-
-var _ repository.ClientRepository = (*ClientRepository)(nil)
 
 func (r *ClientRepository) GetByClientID(ctx context.Context, tenantID uuid.UUID, clientID string) (*domain.Client, error) {
 	const q = `SELECT` + clientColumns + `FROM clients
@@ -110,7 +109,8 @@ func (r *ClientRepository) Create(ctx context.Context, c *domain.Client) error {
 			access_token_ttl, refresh_token_ttl, id_token_ttl,
 			skip_consent,
 			logo_uri, client_uri, policy_uri, tos_uri, contacts, metadata,
-			protocols, jwks, jwks_uri
+			protocols, jwks, jwks_uri,
+			registration_access_token_hash, is_dynamic
 		) VALUES (
 			$1,$2,$3,$4,$5,$6,
 			$7,$8,$9,$10,$11,
@@ -122,7 +122,8 @@ func (r *ClientRepository) Create(ctx context.Context, c *domain.Client) error {
 			$27,$28,$29,
 			$30,
 			$31,$32,$33,$34,$35,$36,
-			$37,$38,$39
+			$37,$38,$39,
+			$40,$41
 		)`
 
 	meta, err := marshalJSONMap(c.Metadata)
@@ -167,6 +168,7 @@ func (r *ClientRepository) Create(ctx context.Context, c *domain.Client) error {
 		c.SkipConsent,
 		nullableStr(c.LogoURI), nullableStr(c.ClientURI), nullableStr(c.PolicyURI), nullableStr(c.TosURI), c.Contacts, meta,
 		protocols, jwks, nullableStr(c.JWKSURI),
+		nullableStr(c.RegistrationAccessTokenHash), c.IsDynamic,
 	)
 	if err != nil {
 		return fmt.Errorf("create client: %w", err)
@@ -213,8 +215,10 @@ func (r *ClientRepository) Update(ctx context.Context, c *domain.Client) error {
 			protocols = $34,
 			jwks = $35,
 			jwks_uri = $36,
+			registration_access_token_hash = $37,
+			is_dynamic = $38,
 			updated_at = now()
-		WHERE id = $37 AND deleted_at IS NULL`
+		WHERE id = $39 AND deleted_at IS NULL`
 
 	meta, err := marshalJSONMap(c.Metadata)
 	if err != nil {
@@ -237,6 +241,7 @@ func (r *ClientRepository) Update(ctx context.Context, c *domain.Client) error {
 		c.SkipConsent,
 		nullableStr(c.LogoURI), nullableStr(c.ClientURI), nullableStr(c.PolicyURI), nullableStr(c.TosURI), c.Contacts, meta,
 		c.Protocols, jwks, nullableStr(c.JWKSURI),
+		nullableStr(c.RegistrationAccessTokenHash), c.IsDynamic,
 		c.ID,
 	)
 	if err != nil {
@@ -293,6 +298,8 @@ func scanClient(row scanner) (*domain.Client, error) {
 		protocols                      []string
 		jwksRaw                        []byte
 		jwksURI                        pgtype.Text
+		regAccessTokenHash             pgtype.Text
+		isDynamic                      bool
 		createdAt, updatedAt           time.Time
 		deletedAt                      *time.Time
 	)
@@ -309,6 +316,7 @@ func scanClient(row scanner) (*domain.Client, error) {
 		&skipConsent,
 		&logoURI, &clientURI, &policyURI, &tosURI, &contacts, &metaRaw,
 		&protocols, &jwksRaw, &jwksURI,
+		&regAccessTokenHash, &isDynamic,
 		&createdAt, &updatedAt, &deletedAt,
 	)
 	if err != nil {
@@ -364,6 +372,8 @@ func scanClient(row scanner) (*domain.Client, error) {
 		Protocols:                         protocols,
 		JWKS:                              jwks,
 		JWKSURI:                           jwksURI.String,
+		RegistrationAccessTokenHash:       regAccessTokenHash.String,
+		IsDynamic:                         isDynamic,
 		CreatedAt:                         createdAt,
 		UpdatedAt:                         updatedAt,
 		DeletedAt:                         deletedAt,

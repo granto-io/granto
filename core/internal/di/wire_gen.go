@@ -9,25 +9,29 @@ package di
 import (
 	"github.com/granto-io/granto/core/internal/app"
 	"github.com/granto-io/granto/core/internal/repository/postgres"
+	"github.com/granto-io/granto/core/internal/transport/admin"
 	"github.com/granto-io/granto/core/internal/transport/public"
 )
 
 // Injectors from wire.go:
 
 // InitializeApp builds the core application graph.
-func InitializeApp() (*app.App, error) {
-	logger := provideLogger()
-	handler := public.NewHandler(logger)
-	httpHandler := providePublicRouter(handler, logger)
-	config, err := provideConfig()
+// configPath is resolved at the process edge (CLI flag / env), not inside providers.
+func InitializeApp(configPath ConfigPath) (*app.App, error) {
+	config, err := provideConfig(configPath)
 	if err != nil {
 		return nil, err
 	}
+	logger := provideLogger(config)
+	handler := public.NewHandler(logger)
+	httpHandler := providePublicRouter(handler, logger)
 	db, err := provideDB(config)
 	if err != nil {
 		return nil, err
 	}
 	clientRepository := postgres.NewClientRepository(db)
-	appApp := app.NewApp(logger, httpHandler, clientRepository)
+	clientServer := admin.NewClientServer(clientRepository)
+	server := admin.NewServer(clientServer, config)
+	appApp := app.NewApp(config, logger, httpHandler, db, server)
 	return appApp, nil
 }

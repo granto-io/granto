@@ -1,5 +1,11 @@
-# Generated Admin API (Do not edit)
+# Generated Admin API (do not edit)
 
-Сгенерённый код из `api/admin/v1/*.proto` (protobuf, gRPC, gRPC-Gateway).
+Generated from `api/admin/v1/*.proto` via `buf generate` (`make generate-proto`).
 
-Файлы появляются после настройки `buf` / генерации. Вручную не править.
+| Artifact | Source plugin |
+|----------|----------------|
+| `*.pb.go` | `protocolbuffers/go` |
+| `*_grpc.pb.go` | `grpc/go` |
+| `*.pb.gw.go` | `grpc-ecosystem/gateway` |
+
+Hand-written implementations: `internal/transport/admin/`.

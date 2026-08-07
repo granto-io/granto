@@ -42,10 +42,10 @@ From `core/` (or repo root via the root Makefile):
 ```bash
 make generate          # all generators
 make generate-wire     # Google Wire only
-make generate-proto    # admin proto (stub until buf is wired)
+make generate-proto    # admin: api/admin → gen/admin (buf)
 ```
 
-Equivalent low-level Wire hook: `go generate ./internal/di`.
+Requires [buf](https://buf.build/docs/installation) for proto. Equivalent: `buf generate` from `core/`.
 
 See `core/internal/di/README.md`, `core/api/public/README.md`, and `core/api/admin/README.md`.
 

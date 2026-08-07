@@ -42,6 +42,13 @@ oauth2:
   # consent_url: ""
   logout_url: "https://app.example.com"
 
+oidc:
+  # extra_scopes: ["offline_access"]
+  dynamic_client_registration:
+    # Public /oauth2/register (RFC 7591). Keep false unless you need open DCR.
+    enabled: false
+    # default_scopes: ["openid", "offline_access"]
+
 admin:
   # Prefer GRANTO_ADMIN_TOKEN in production.
   token: "change-me-in-production"

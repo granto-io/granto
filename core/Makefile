@@ -18,9 +18,8 @@ generate-wire: ## Regenerate Google Wire (internal/di)
 	go generate ./internal/di
 
 .PHONY: generate-proto
-generate-proto: ## Regenerate admin gRPC / gateway from api/admin (stub)
-	@echo "generate-proto: not configured yet (buf/protoc → gen/admin)"
-	@# buf generate
+generate-proto: ## Regenerate admin gRPC / gateway (api/admin → gen/admin)
+	buf generate
 
 # ── Build / test (extend as needed) ────────────────────────
 
