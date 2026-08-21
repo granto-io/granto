@@ -74,7 +74,7 @@ func (r *LoginChallengeRepository) Get(ctx context.Context, tenantID, id uuid.UU
 	return c, nil
 }
 
-func (r *LoginChallengeRepository) Consume(ctx context.Context, tenantID, id uuid.UUID, opts repository.LoginChallengeConsumeOpts) (*domain.LoginChallenge, error) {
+func (r *LoginChallengeRepository) Consume(ctx context.Context, tenantID, id uuid.UUID, opts repository.ChallengeConsumeOpts) (*domain.LoginChallenge, error) {
 	c, err := r.load(ctx, tenantID, id)
 	if err != nil {
 		return nil, err

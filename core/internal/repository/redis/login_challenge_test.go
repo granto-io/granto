@@ -83,7 +83,7 @@ func TestLoginChallengeRepositoryCreateGetConsumeDefaultMode(t *testing.T) {
 	}
 
 	// Default mode: wrong token still rejected if provided.
-	if _, err := repo.Consume(ctx, c.TenantID, id, repository.LoginChallengeConsumeOpts{
+	if _, err := repo.Consume(ctx, c.TenantID, id, repository.ChallengeConsumeOpts{
 		AcceptToken:  "wrong",
 		RequireToken: false,
 	}); !errors.Is(err, domain.ErrLoginChallengeAcceptTokenInvalid) {
@@ -94,7 +94,7 @@ func TestLoginChallengeRepositoryCreateGetConsumeDefaultMode(t *testing.T) {
 	}
 
 	// Default mode: empty token allowed (Hydra-compatible).
-	consumed, err := repo.Consume(ctx, c.TenantID, id, repository.LoginChallengeConsumeOpts{
+	consumed, err := repo.Consume(ctx, c.TenantID, id, repository.ChallengeConsumeOpts{
 		RequireToken: false,
 	})
 	if err != nil {
@@ -119,7 +119,7 @@ func TestLoginChallengeRepositoryConsumeStrictMode(t *testing.T) {
 	token := c.AcceptToken
 	id := c.ID
 
-	if _, err := repo.Consume(ctx, c.TenantID, id, repository.LoginChallengeConsumeOpts{
+	if _, err := repo.Consume(ctx, c.TenantID, id, repository.ChallengeConsumeOpts{
 		RequireToken: true,
 	}); !errors.Is(err, domain.ErrLoginChallengeAcceptTokenInvalid) {
 		t.Fatalf("strict empty token: err=%v, want invalid", err)
@@ -128,7 +128,7 @@ func TestLoginChallengeRepositoryConsumeStrictMode(t *testing.T) {
 		t.Fatalf("Get after strict empty Consume: %v", err)
 	}
 
-	consumed, err := repo.Consume(ctx, c.TenantID, id, repository.LoginChallengeConsumeOpts{
+	consumed, err := repo.Consume(ctx, c.TenantID, id, repository.ChallengeConsumeOpts{
 		AcceptToken:  token,
 		RequireToken: true,
 	})

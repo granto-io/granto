@@ -20,14 +20,15 @@ import (
 // App holds process-level dependencies constructed by the DI graph.
 // Lifecycle methods (Run) live here; Wire only builds the graph.
 type App struct {
-	Config          *config.Config
-	Logger          *slog.Logger
-	Public          http.Handler
-	DB              *postgres.DB
-	Redis           *redis.Client
-	LoginSessions   repository.LoginSessionRepository
-	LoginChallenges repository.LoginChallengeRepository
-	Admin           *admin.Server
+	Config            *config.Config
+	Logger            *slog.Logger
+	Public            http.Handler
+	DB                *postgres.DB
+	Redis             *redis.Client
+	LoginSessions     repository.LoginSessionRepository
+	LoginChallenges   repository.LoginChallengeRepository
+	ConsentChallenges repository.ConsentChallengeRepository
+	Admin             *admin.Server
 
 	publicHTTP *http.Server
 }
@@ -41,17 +42,19 @@ func NewApp(
 	rdb *redis.Client,
 	loginSessions repository.LoginSessionRepository,
 	loginChallenges repository.LoginChallengeRepository,
+	consentChallenges repository.ConsentChallengeRepository,
 	adminSrv *admin.Server,
 ) *App {
 	return &App{
-		Config:          cfg,
-		Logger:          logger,
-		Public:          public,
-		DB:              db,
-		Redis:           rdb,
-		LoginSessions:   loginSessions,
-		LoginChallenges: loginChallenges,
-		Admin:           adminSrv,
+		Config:            cfg,
+		Logger:            logger,
+		Public:            public,
+		DB:                db,
+		Redis:             rdb,
+		LoginSessions:     loginSessions,
+		LoginChallenges:   loginChallenges,
+		ConsentChallenges: consentChallenges,
+		Admin:             adminSrv,
 	}
 }
 

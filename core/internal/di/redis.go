@@ -18,6 +18,8 @@ var RedisSet = wire.NewSet(
 	provideRedis,
 	reporredis.NewLoginChallengeRepository,
 	wire.Bind(new(repository.LoginChallengeRepository), new(*reporredis.LoginChallengeRepository)),
+	reporredis.NewConsentChallengeRepository,
+	wire.Bind(new(repository.ConsentChallengeRepository), new(*reporredis.ConsentChallengeRepository)),
 )
 
 func provideRedis(cfg *config.Config) (*intredis.Client, error) {

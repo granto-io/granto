@@ -36,9 +36,10 @@ func InitializeApp(configPath ConfigPath) (*app.App, error) {
 	}
 	loginSessionRepository := postgres.NewLoginSessionRepository(db)
 	loginChallengeRepository := redis.NewLoginChallengeRepository(client)
+	consentChallengeRepository := redis.NewConsentChallengeRepository(client)
 	clientRepository := postgres.NewClientRepository(db)
 	clientServer := admin.NewClientServer(clientRepository)
 	server := admin.NewServer(clientServer, config)
-	appApp := app.NewApp(config, logger, httpHandler, db, client, loginSessionRepository, loginChallengeRepository, server)
+	appApp := app.NewApp(config, logger, httpHandler, db, client, loginSessionRepository, loginChallengeRepository, consentChallengeRepository, server)
 	return appApp, nil
 }
