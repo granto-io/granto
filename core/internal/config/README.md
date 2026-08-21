@@ -120,8 +120,9 @@ Admin API access (MVP: static bearer; production may move to mTLS / OAuth).
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `token` | *(required)* | Bearer token for Admin API |
+| `accept_strict` | `false` | When `true`, AcceptLogin/AcceptConsent require `accept_token` from Get*. Default = Hydra-compatible (challenge id + Admin auth enough) |
 
-Env: `GRANTO_ADMIN_TOKEN`. Prefer env in production. IP allow-listing is out of MVP (network / reverse-proxy concern for now).
+Env: `GRANTO_ADMIN_TOKEN`, `GRANTO_ADMIN_ACCEPT_STRICT`. Prefer env for `token` in production. IP allow-listing is out of MVP (network / reverse-proxy concern for now).
 
 ### `cors`
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/granto-io/granto/core/internal/domain"
 	iredis "github.com/granto-io/granto/core/internal/redis"
+	"github.com/granto-io/granto/core/internal/repository"
 )
 
 // Key: {tenantID}:login_challenge:{id}
@@ -73,7 +74,7 @@ func (r *LoginChallengeRepository) Get(ctx context.Context, tenantID, id uuid.UU
 	return c, nil
 }
 
-func (r *LoginChallengeRepository) Consume(ctx context.Context, tenantID, id uuid.UUID, acceptToken string) (*domain.LoginChallenge, error) {
+func (r *LoginChallengeRepository) Consume(ctx context.Context, tenantID, id uuid.UUID, opts repository.LoginChallengeConsumeOpts) (*domain.LoginChallenge, error) {
 	c, err := r.load(ctx, tenantID, id)
 	if err != nil {
 		return nil, err
@@ -82,8 +83,10 @@ func (r *LoginChallengeRepository) Consume(ctx context.Context, tenantID, id uui
 		_ = r.rdb.Del(ctx, loginChallengeKey(tenantID, id)).Err()
 		return nil, domain.ErrLoginChallengeExpired
 	}
-	if !c.ValidAcceptToken(acceptToken) {
-		return nil, domain.ErrLoginChallengeAcceptTokenInvalid
+	if opts.RequireToken || opts.AcceptToken != "" {
+		if !c.ValidAcceptToken(opts.AcceptToken) {
+			return nil, domain.ErrLoginChallengeAcceptTokenInvalid
+		}
 	}
 	if err := r.rdb.Del(ctx, loginChallengeKey(tenantID, id)).Err(); err != nil {
 		return nil, fmt.Errorf("delete login challenge after consume: %w", err)

@@ -52,6 +52,7 @@ oidc:
 admin:
   # Prefer GRANTO_ADMIN_TOKEN in production.
   token: "change-me-in-production"
+  # accept_strict: false  # true = Require accept_token on AcceptLogin/AcceptConsent
 
 cors:
   enabled: false

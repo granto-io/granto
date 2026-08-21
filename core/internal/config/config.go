@@ -92,6 +92,9 @@ type DynamicClientRegistrationConfig struct {
 // AdminConfig holds Admin API access settings (MVP: static bearer).
 type AdminConfig struct {
 	Token string `yaml:"token"`
+	// AcceptStrict requires accept_token on AcceptLogin/AcceptConsent.
+	// Default false = Hydra-compatible (challenge id + Admin auth enough).
+	AcceptStrict bool `yaml:"accept_strict"`
 }
 
 // CORSConfig holds Cross-Origin Resource Sharing settings.
