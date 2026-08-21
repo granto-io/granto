@@ -129,6 +129,9 @@ func overrideFromEnv(cfg *Config) {
 	if v := os.Getenv("GRANTO_ADMIN_TOKEN"); v != "" {
 		cfg.Admin.Token = v
 	}
+	if v := os.Getenv("GRANTO_ADMIN_ACCEPT_STRICT"); v != "" {
+		cfg.Admin.AcceptStrict = v == "true" || v == "1"
+	}
 	if v := os.Getenv("GRANTO_LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
 	}

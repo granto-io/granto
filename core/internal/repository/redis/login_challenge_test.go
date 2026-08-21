@@ -12,6 +12,7 @@ import (
 	"github.com/granto-io/granto/core/internal/config"
 	"github.com/granto-io/granto/core/internal/domain"
 	iredis "github.com/granto-io/granto/core/internal/redis"
+	"github.com/granto-io/granto/core/internal/repository"
 	reporredis "github.com/granto-io/granto/core/internal/repository/redis"
 )
 
@@ -52,7 +53,7 @@ func sampleChallenge(t *testing.T) *domain.LoginChallenge {
 	}
 }
 
-func TestLoginChallengeRepositoryCreateGetConsume(t *testing.T) {
+func TestLoginChallengeRepositoryCreateGetConsumeDefaultMode(t *testing.T) {
 	t.Parallel()
 	repo := newTestRepo(t)
 	ctx := context.Background()
@@ -81,23 +82,61 @@ func TestLoginChallengeRepositoryCreateGetConsume(t *testing.T) {
 		t.Fatal("Get AcceptToken mismatch")
 	}
 
-	if _, err := repo.Consume(ctx, c.TenantID, id, "wrong"); !errors.Is(err, domain.ErrLoginChallengeAcceptTokenInvalid) {
+	// Default mode: wrong token still rejected if provided.
+	if _, err := repo.Consume(ctx, c.TenantID, id, repository.LoginChallengeConsumeOpts{
+		AcceptToken:  "wrong",
+		RequireToken: false,
+	}); !errors.Is(err, domain.ErrLoginChallengeAcceptTokenInvalid) {
 		t.Fatalf("Consume wrong token: err=%v, want ErrLoginChallengeAcceptTokenInvalid", err)
 	}
-	// Wrong token must leave challenge in place.
 	if _, err := repo.Get(ctx, c.TenantID, id); err != nil {
 		t.Fatalf("Get after bad Consume: %v", err)
 	}
 
-	consumed, err := repo.Consume(ctx, c.TenantID, id, token)
+	// Default mode: empty token allowed (Hydra-compatible).
+	consumed, err := repo.Consume(ctx, c.TenantID, id, repository.LoginChallengeConsumeOpts{
+		RequireToken: false,
+	})
 	if err != nil {
-		t.Fatalf("Consume: %v", err)
+		t.Fatalf("Consume default empty token: %v", err)
 	}
 	if consumed.ID != id {
 		t.Fatalf("Consume ID = %v, want %v", consumed.ID, id)
 	}
 	if _, err := repo.Get(ctx, c.TenantID, id); !errors.Is(err, domain.ErrLoginChallengeNotFound) {
 		t.Fatalf("Get after Consume: err=%v, want not found", err)
+	}
+}
+
+func TestLoginChallengeRepositoryConsumeStrictMode(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+	ctx := context.Background()
+	c := sampleChallenge(t)
+	if err := repo.Create(ctx, c); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	token := c.AcceptToken
+	id := c.ID
+
+	if _, err := repo.Consume(ctx, c.TenantID, id, repository.LoginChallengeConsumeOpts{
+		RequireToken: true,
+	}); !errors.Is(err, domain.ErrLoginChallengeAcceptTokenInvalid) {
+		t.Fatalf("strict empty token: err=%v, want invalid", err)
+	}
+	if _, err := repo.Get(ctx, c.TenantID, id); err != nil {
+		t.Fatalf("Get after strict empty Consume: %v", err)
+	}
+
+	consumed, err := repo.Consume(ctx, c.TenantID, id, repository.LoginChallengeConsumeOpts{
+		AcceptToken:  token,
+		RequireToken: true,
+	})
+	if err != nil {
+		t.Fatalf("strict Consume: %v", err)
+	}
+	if consumed.ID != id {
+		t.Fatalf("Consume ID = %v, want %v", consumed.ID, id)
 	}
 }
 

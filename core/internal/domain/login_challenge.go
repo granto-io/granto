@@ -12,8 +12,9 @@ import (
 // LoginChallenge is a short-lived snapshot of an /oauth2/auth request while the
 // user authenticates in the consent module. Stored in Redis (not Postgres).
 //
-// Public URL carries only ID. AcceptToken is returned by authenticated GetLogin
-// and required on AcceptLogin — not a browser CSRF cookie (see project decisions).
+// Public URL carries only ID. AcceptToken is always generated and returned by
+// authenticated GetLogin; whether AcceptLogin must present it depends on
+// admin.accept_strict (default off = Hydra-compatible; see project decisions).
 type LoginChallenge struct {
 	ID       uuid.UUID
 	TenantID uuid.UUID
@@ -36,6 +37,7 @@ type LoginChallenge struct {
 	OIDCContext OIDCContext
 
 	// AcceptToken is a high-entropy secret. Never put it in the browser redirect query.
+	// Required on Accept only when admin.accept_strict is enabled.
 	AcceptToken string
 
 	ExpiresAt time.Time
