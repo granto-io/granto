@@ -16,4 +16,8 @@ var (
 	ErrAuthorizationCodeNotFound          = errors.New("authorization code not found")
 	ErrAuthorizationCodeExpired           = errors.New("authorization code expired")
 	ErrAuthorizationCodeUsed              = errors.New("authorization code already used")
+	ErrAccessTokenNotFound                = errors.New("access token not found")
+	ErrAccessTokenExpired                 = errors.New("access token expired")
+	ErrRefreshTokenNotFound               = errors.New("refresh token not found")
+	ErrRefreshTokenExpired                = errors.New("refresh token expired")
 )

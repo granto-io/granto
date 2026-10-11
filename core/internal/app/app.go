@@ -30,6 +30,7 @@ type App struct {
 	ConsentChallenges  repository.ConsentChallengeRepository
 	FlowVerifiers      repository.FlowVerifierRepository
 	AuthorizationCodes repository.AuthorizationCodeRepository
+	Tokens             repository.TokenRepository
 	Admin              *admin.Server
 
 	publicHTTP *http.Server
@@ -47,6 +48,7 @@ func NewApp(
 	consentChallenges repository.ConsentChallengeRepository,
 	flowVerifiers repository.FlowVerifierRepository,
 	authorizationCodes repository.AuthorizationCodeRepository,
+	tokens repository.TokenRepository,
 	adminSrv *admin.Server,
 ) *App {
 	return &App{
@@ -60,6 +62,7 @@ func NewApp(
 		ConsentChallenges:  consentChallenges,
 		FlowVerifiers:      flowVerifiers,
 		AuthorizationCodes: authorizationCodes,
+		Tokens:             tokens,
 		Admin:              adminSrv,
 	}
 }

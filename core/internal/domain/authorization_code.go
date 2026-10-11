@@ -1,8 +1,6 @@
 package domain
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"time"
 
 	"github.com/google/uuid"
@@ -45,6 +43,5 @@ func (c *AuthorizationCode) IsExpired() bool {
 
 // HashAuthorizationCode returns SHA-256 hex of the raw authorization code.
 func HashAuthorizationCode(raw string) string {
-	sum := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(sum[:])
+	return HashToken(raw)
 }
