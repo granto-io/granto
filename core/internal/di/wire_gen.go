@@ -9,6 +9,7 @@ package di
 import (
 	"github.com/granto-io/granto/core/internal/app"
 	"github.com/granto-io/granto/core/internal/oauth2"
+	"github.com/granto-io/granto/core/internal/oidc"
 	"github.com/granto-io/granto/core/internal/repository/postgres"
 	"github.com/granto-io/granto/core/internal/repository/redis"
 	"github.com/granto-io/granto/core/internal/transport/admin"
@@ -40,8 +41,15 @@ func InitializeApp(configPath ConfigPath) (*app.App, error) {
 	flowVerifierRepository := redis.NewFlowVerifierRepository(client)
 	authorizationCodeRepository := redis.NewAuthorizationCodeRepository(client)
 	tokenRepository := redis.NewTokenRepository(client)
-	flow := oauth2.NewFlow(config, clientRepository, loginChallengeRepository, consentChallengeRepository, loginSessionRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository)
-	handler := public.NewHandler(logger, config, flow)
+	signingKeyRepository := postgres.NewSigningKeyRepository(db)
+	manager, err := provideKeyManager(config, signingKeyRepository, logger)
+	if err != nil {
+		return nil, err
+	}
+	idTokens := oidc.NewIDTokens(config, manager)
+	flow := oauth2.NewFlow(config, clientRepository, loginChallengeRepository, consentChallengeRepository, loginSessionRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository, idTokens)
+	discovery := oidc.NewDiscovery(config)
+	handler := public.NewHandler(logger, config, flow, manager, discovery)
 	httpHandler := providePublicRouter(handler, logger)
 	clientServer := admin.NewClientServer(clientRepository)
 	oAuth2Server := admin.NewOAuth2Server(flow)

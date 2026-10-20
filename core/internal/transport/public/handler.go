@@ -9,23 +9,39 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/granto-io/granto/core/internal/config"
+	"github.com/granto-io/granto/core/internal/keys"
 	"github.com/granto-io/granto/core/internal/oauth2"
+	"github.com/granto-io/granto/core/internal/oidc"
 )
 
 // Handler is the shared HTTP adapter for public RFC endpoints.
 // Protocol-specific handlers live in oauth2.go, oidc.go, and gnap.go.
 type Handler struct {
-	logger *slog.Logger
-	cfg    *config.Config
-	flow   *oauth2.Flow
+	logger    *slog.Logger
+	cfg       *config.Config
+	flow      *oauth2.Flow
+	keyMgr    *keys.Manager
+	discovery *oidc.Discovery
 }
 
 // NewHandler constructs a Handler.
-func NewHandler(logger *slog.Logger, cfg *config.Config, flow *oauth2.Flow) *Handler {
+func NewHandler(
+	logger *slog.Logger,
+	cfg *config.Config,
+	flow *oauth2.Flow,
+	keyMgr *keys.Manager,
+	discovery *oidc.Discovery,
+) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{logger: logger, cfg: cfg, flow: flow}
+	return &Handler{
+		logger:    logger,
+		cfg:       cfg,
+		flow:      flow,
+		keyMgr:    keyMgr,
+		discovery: discovery,
+	}
 }
 
 func (h *Handler) notImplemented(w http.ResponseWriter, r *http.Request, endpoint string) {

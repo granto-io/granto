@@ -74,6 +74,8 @@ Issuance defaults and crypto for signing material at rest.
 | `issuer` | *(required)* | `iss` claim / discovery issuer |
 | `default_algorithm` | `RS256` | Default signing alg |
 | `access_token_ttl` / `refresh_token_ttl` / `id_token_ttl` | `1h` / `720h` / `1h` | Server defaults (clients may override) |
+| `master_key` | — | Required for auto-gen signing keys (AES-256-GCM at rest). Skip if static PEM is set. `GRANTO_MASTER_KEY` |
+| `signing_keys.private_key_file` / `private_key_pem` / `kid` | empty | Static AS signing key (prod). Env: `GRANTO_TOKEN_SIGNING_PRIVATE_KEY_FILE`, `…_PEM`, `…_KID` |
 | `master_key` | *(required, ≥32 chars)* | Encrypts private keys in DB |
 
 Env: `GRANTO_ISSUER`, `GRANTO_MASTER_KEY`. Prefer env for `master_key` in production.

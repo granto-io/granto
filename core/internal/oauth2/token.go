@@ -10,15 +10,17 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/granto-io/granto/core/internal/domain"
+	"github.com/granto-io/granto/core/internal/oidc"
 )
 
-// TokenResponse is the OAuth 2.0 token endpoint success body (RFC 6749).
+// TokenResponse is the OAuth 2.0 / OIDC token endpoint success body.
 type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	TokenType    string `json:"token_type"`
 	ExpiresIn    int    `json:"expires_in"`
 	RefreshToken string `json:"refresh_token,omitempty"`
 	Scope        string `json:"scope,omitempty"`
+	IDToken      string `json:"id_token,omitempty"`
 }
 
 // ExchangeCodeInput is grant_type=authorization_code.
@@ -75,7 +77,15 @@ func (f *Flow) ExchangeCode(ctx context.Context, in ExchangeCodeInput) (*TokenRe
 		return nil, ErrPKCERequired
 	}
 
-	return f.issueTokens(ctx, client, authCode.Subject, authCode.SessionID, authCode.Scopes, authCode.Audience, authCode.ExtraClaims, false)
+	return f.issueTokens(ctx, client, issueTokenOpts{
+		subject:     authCode.Subject,
+		sessionID:   authCode.SessionID,
+		scopes:      authCode.Scopes,
+		audience:    authCode.Audience,
+		extra:       authCode.ExtraClaims,
+		nonce:       authCode.Nonce,
+		skipRefresh: false,
+	})
 }
 
 // RefreshToken rotates the refresh token and issues a new access token.
@@ -134,7 +144,14 @@ func (f *Flow) RefreshToken(ctx context.Context, in RefreshTokenInput) (*TokenRe
 		return nil, fmt.Errorf("rotate refresh token: %w", err)
 	}
 
-	resp, err := f.issueTokens(ctx, client, old.Subject, old.SessionID, scopes, old.Audience, old.Extra, true)
+	resp, err := f.issueTokens(ctx, client, issueTokenOpts{
+		subject:     old.Subject,
+		sessionID:   old.SessionID,
+		scopes:      scopes,
+		audience:    old.Audience,
+		extra:       old.Extra,
+		skipRefresh: true,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -142,16 +159,17 @@ func (f *Flow) RefreshToken(ctx context.Context, in RefreshTokenInput) (*TokenRe
 	return resp, nil
 }
 
-func (f *Flow) issueTokens(
-	ctx context.Context,
-	client *domain.Client,
-	subject string,
-	sessionID uuid.UUID,
-	scopes []string,
-	audience []string,
-	extra map[string]any,
-	skipRefresh bool,
-) (*TokenResponse, error) {
+type issueTokenOpts struct {
+	subject     string
+	sessionID   uuid.UUID
+	scopes      []string
+	audience    []string
+	extra       map[string]any
+	nonce       string
+	skipRefresh bool
+}
+
+func (f *Flow) issueTokens(ctx context.Context, client *domain.Client, opts issueTokenOpts) (*TokenResponse, error) {
 	now := time.Now().UTC()
 	atTTL := f.accessTTL(client)
 	rawAT, err := newRawSecret()
@@ -163,11 +181,11 @@ func (f *Flow) issueTokens(
 		JTI:       uuid.NewString(),
 		TenantID:  f.tenantID(),
 		ClientID:  client.ClientID,
-		Subject:   subject,
-		SessionID: sessionID,
-		Scopes:    scopes,
-		Audience:  audience,
-		Extra:     extra,
+		Subject:   opts.subject,
+		SessionID: opts.sessionID,
+		Scopes:    opts.scopes,
+		Audience:  opts.audience,
+		Extra:     opts.extra,
 		IssuedAt:  now,
 		ExpiresAt: now.Add(atTTL),
 	}
@@ -179,14 +197,20 @@ func (f *Flow) issueTokens(
 		AccessToken: rawAT,
 		TokenType:   "Bearer",
 		ExpiresIn:   int(atTTL.Seconds()),
-		Scope:       strings.Join(scopes, " "),
+		Scope:       strings.Join(opts.scopes, " "),
 	}
 
-	if skipRefresh {
+	if idToken, err := f.issueIDToken(ctx, client, opts); err != nil {
+		return nil, err
+	} else if idToken != "" {
+		resp.IDToken = idToken
+	}
+
+	if opts.skipRefresh {
 		return resp, nil
 	}
 	// RT when client allows refresh_token and we have a login session (opaque session binding).
-	if sessionID == uuid.Nil || !client.HasGrantType(domain.GrantTypeRefreshToken) {
+	if opts.sessionID == uuid.Nil || !client.HasGrantType(domain.GrantTypeRefreshToken) {
 		return resp, nil
 	}
 
@@ -199,11 +223,11 @@ func (f *Flow) issueTokens(
 		JTI:       uuid.NewString(),
 		TenantID:  f.tenantID(),
 		ClientID:  client.ClientID,
-		Subject:   subject,
-		SessionID: sessionID,
-		Scopes:    scopes,
-		Audience:  audience,
-		Extra:     extra,
+		Subject:   opts.subject,
+		SessionID: opts.sessionID,
+		Scopes:    opts.scopes,
+		Audience:  opts.audience,
+		Extra:     opts.extra,
 		IssuedAt:  now,
 		ExpiresAt: now.Add(f.refreshTTL(client)),
 	}
@@ -212,6 +236,28 @@ func (f *Flow) issueTokens(
 	}
 	resp.RefreshToken = rawRT
 	return resp, nil
+}
+
+func (f *Flow) issueIDToken(ctx context.Context, client *domain.Client, opts issueTokenOpts) (string, error) {
+	if f.idTokens == nil {
+		return "", nil
+	}
+	var authTime time.Time
+	if opts.sessionID != uuid.Nil {
+		if sess, err := f.loginSessions.GetByID(ctx, opts.sessionID); err == nil {
+			authTime = sess.AuthenticatedAt
+		}
+	}
+	return f.idTokens.Issue(ctx, oidc.IssueInput{
+		ClientID:   client.ClientID,
+		Subject:    opts.subject,
+		SessionID:  opts.sessionID,
+		AuthTime:   authTime,
+		Nonce:      opts.nonce,
+		Scopes:     opts.scopes,
+		Extra:      opts.extra,
+		IDTokenTTL: client.IDTokenTTL,
+	})
 }
 
 func (f *Flow) accessTTL(client *domain.Client) time.Duration {

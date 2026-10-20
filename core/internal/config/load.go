@@ -117,6 +117,15 @@ func overrideFromEnv(cfg *Config) {
 	if v := os.Getenv("GRANTO_MASTER_KEY"); v != "" {
 		cfg.Token.MasterKey = v
 	}
+	if v := os.Getenv("GRANTO_TOKEN_SIGNING_PRIVATE_KEY_FILE"); v != "" {
+		cfg.Token.SigningKeys.PrivateKeyFile = v
+	}
+	if v := os.Getenv("GRANTO_TOKEN_SIGNING_PRIVATE_KEY_PEM"); v != "" {
+		cfg.Token.SigningKeys.PrivateKeyPEM = v
+	}
+	if v := os.Getenv("GRANTO_TOKEN_SIGNING_KID"); v != "" {
+		cfg.Token.SigningKeys.KID = v
+	}
 	if v := os.Getenv("GRANTO_LOGIN_URL"); v != "" {
 		cfg.OAuth2.LoginURL = v
 	}
@@ -166,11 +175,19 @@ func validate(cfg *Config) error {
 	if cfg.Token.Issuer == "" {
 		return fmt.Errorf("token.issuer is required (set yaml or GRANTO_ISSUER)")
 	}
-	if cfg.Token.MasterKey == "" {
-		return fmt.Errorf("token.master_key is required (set yaml or GRANTO_MASTER_KEY)")
+	if !cfg.Token.HasStaticSigningKey() {
+		if cfg.Token.MasterKey == "" {
+			return fmt.Errorf("token.master_key is required when no static signing key is set (yaml/GRANTO_MASTER_KEY), or set token.signing_keys.private_key_file / private_key_pem")
+		}
+		if len(cfg.Token.MasterKey) < 32 {
+			return fmt.Errorf("token.master_key must be at least 32 characters")
+		}
 	}
-	if len(cfg.Token.MasterKey) < 32 {
-		return fmt.Errorf("token.master_key must be at least 32 characters")
+	if cfg.Token.DefaultAlgorithm == "" {
+		cfg.Token.DefaultAlgorithm = "RS256"
+	}
+	if cfg.Token.DefaultAlgorithm != "RS256" {
+		return fmt.Errorf("token.default_algorithm: only RS256 is supported in MVP (got %q)", cfg.Token.DefaultAlgorithm)
 	}
 	if cfg.Postgres.DSN == "" {
 		return fmt.Errorf("postgres.dsn is required (set yaml or GRANTO_POSTGRES_DSN)")
