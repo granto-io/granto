@@ -13,6 +13,7 @@ var AppSet = wire.NewSet(
 	PublicHTTPSet,
 	PostgresSet,
 	RedisSet,
+	KeysSet,
 	AdminSet,
 	app.NewApp,
 )

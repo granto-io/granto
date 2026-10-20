@@ -303,7 +303,7 @@ func newTestFlow(t *testing.T, strict bool) *testDeps {
 			},
 		}},
 	}
-	d.flow = oauth2.NewFlow(cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{}, d.codes, d.tokens)
+	d.flow = oauth2.NewFlow(cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{}, d.codes, d.tokens, nil)
 	return d
 }
 
@@ -511,7 +511,7 @@ func TestAuthorizeSSOSkipsToConsent(t *testing.T) {
 	if err := sessions.Create(ctx, sess); err != nil {
 		t.Fatalf("Create session: %v", err)
 	}
-	f := oauth2.NewFlow(cfg, clients, lc, cc, sessions, &memVerifiers{}, &memCodes{}, &memTokens{})
+	f := oauth2.NewFlow(cfg, clients, lc, cc, sessions, &memVerifiers{}, &memCodes{}, &memTokens{}, nil)
 
 	res, err := f.Authorize(ctx, oauth2.AuthorizeInput{
 		ClientID:          "app-a",

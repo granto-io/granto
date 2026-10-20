@@ -20,4 +20,5 @@ var (
 	ErrAccessTokenExpired                 = errors.New("access token expired")
 	ErrRefreshTokenNotFound               = errors.New("refresh token not found")
 	ErrRefreshTokenExpired                = errors.New("refresh token expired")
+	ErrSigningKeyNotFound                 = errors.New("signing key not found")
 )

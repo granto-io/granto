@@ -24,13 +24,20 @@ redis:
   pool_size: 10
 
 token:
-  # Prefer GRANTO_ISSUER / GRANTO_MASTER_KEY in production.
+  # Prefer GRANTO_ISSUER in production.
   issuer: "https://auth.example.com"
   default_algorithm: "RS256"
   access_token_ttl: 1h
   refresh_token_ttl: 720h
   id_token_ttl: 1h
+  # Hybrid signing keys:
+  # - Prod: set private_key_file or GRANTO_TOKEN_SIGNING_PRIVATE_KEY_PEM (Vault/K8s mount).
+  # - Dev: leave empty and set master_key / GRANTO_MASTER_KEY → auto-generate in Postgres.
   # master_key: "at-least-32-characters-long!!!!"
+  signing_keys:
+    # private_key_file: "/var/run/secrets/granto/signing.pem"
+    # private_key_pem: ""
+    # kid: ""
 
 session:
   default_ttl: 24h

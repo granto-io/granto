@@ -13,6 +13,7 @@ import (
 
 	"github.com/granto-io/granto/core/internal/config"
 	"github.com/granto-io/granto/core/internal/domain"
+	"github.com/granto-io/granto/core/internal/oidc"
 	"github.com/granto-io/granto/core/internal/repository"
 )
 
@@ -32,6 +33,7 @@ type Flow struct {
 	flowVerifiers     repository.FlowVerifierRepository
 	authCodes         repository.AuthorizationCodeRepository
 	tokens            repository.TokenRepository
+	idTokens          *oidc.IDTokens
 }
 
 // NewFlow constructs an OAuth2 flow orchestrator.
@@ -44,6 +46,7 @@ func NewFlow(
 	flowVerifiers repository.FlowVerifierRepository,
 	authCodes repository.AuthorizationCodeRepository,
 	tokens repository.TokenRepository,
+	idTokens *oidc.IDTokens,
 ) *Flow {
 	return &Flow{
 		cfg:               cfg,
@@ -54,6 +57,7 @@ func NewFlow(
 		flowVerifiers:     flowVerifiers,
 		authCodes:         authCodes,
 		tokens:            tokens,
+		idTokens:          idTokens,
 	}
 }
 

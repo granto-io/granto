@@ -1,7 +1,10 @@
 // Package config loads granto-core settings: defaults → optional YAML → env overrides.
 package config
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Config is the root configuration for granto-core.
 type Config struct {
@@ -55,8 +58,26 @@ type TokenConfig struct {
 	AccessTokenTTL   time.Duration `yaml:"access_token_ttl"`
 	RefreshTokenTTL  time.Duration `yaml:"refresh_token_ttl"`
 	IDTokenTTL       time.Duration `yaml:"id_token_ttl"`
-	// MasterKey encrypts signing material at rest. Prefer GRANTO_MASTER_KEY in production.
-	MasterKey string `yaml:"master_key"`
+	// MasterKey encrypts auto-generated signing keys at rest (AES-256-GCM).
+	// Required only when SigningKeys has no static PEM (auto-gen path).
+	// Prefer GRANTO_MASTER_KEY in production for that path.
+	MasterKey   string            `yaml:"master_key"`
+	SigningKeys SigningKeysConfig `yaml:"signing_keys"`
+}
+
+// SigningKeysConfig is the hybrid AS signing-key source.
+// If PrivateKeyFile or PrivateKeyPEM is set, that key is used (not stored in Postgres).
+// Otherwise keys are loaded/generated in Postgres (requires MasterKey).
+type SigningKeysConfig struct {
+	PrivateKeyFile string `yaml:"private_key_file"`
+	PrivateKeyPEM  string `yaml:"private_key_pem"`
+	KID            string `yaml:"kid"`
+}
+
+// HasStaticSigningKey reports whether a static PEM source is configured.
+func (c TokenConfig) HasStaticSigningKey() bool {
+	return strings.TrimSpace(c.SigningKeys.PrivateKeyFile) != "" ||
+		strings.TrimSpace(c.SigningKeys.PrivateKeyPEM) != ""
 }
 
 // SessionConfig holds session TTL bounds.
