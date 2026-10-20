@@ -16,6 +16,8 @@ func domainErrToStatus(err error) error {
 	switch {
 	case errors.Is(err, domain.ErrClientNotFound):
 		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, domain.ErrLoginSessionNotFound):
+		return status.Error(codes.NotFound, err.Error())
 	default:
 		return status.Errorf(codes.Internal, "%v", err)
 	}

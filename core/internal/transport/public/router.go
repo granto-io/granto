@@ -41,7 +41,7 @@ func NewRouter(h *Handler, opts Options) http.Handler {
 		}
 	}
 	if h == nil {
-		h = NewHandler(logger)
+		h = NewHandler(logger, nil, nil)
 	}
 
 	r := chi.NewRouter()
