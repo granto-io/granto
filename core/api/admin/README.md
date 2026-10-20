@@ -29,9 +29,23 @@ Full regenerate (Wire + proto): `make generate`.
 
 | Service | Proto | HTTP prefix | Impl |
 |---------|-------|-------------|------|
-| `ClientService` | `v1/client.proto` | `/admin/v1/clients` | `internal/transport/admin/client.go` (CRUD via `ClientRepository`) |
+| `ClientService` | `v1/client.proto` | `/admin/v1/clients` | `internal/transport/admin/client.go` |
+| `OAuth2Service` | `v1/oauth2.proto` | `/admin/oauth2/auth/requests/...` (Hydra-like) | `internal/transport/admin/oauth2.go` → `internal/oauth2.Flow` |
 
 Client CRUD: create / get / list / update / delete. Path `{id}` is the internal UUID (`clients.id`), not `client_id`.
+
+OAuth2 login/consent Admin (Hydra-compatible paths):
+
+| Method | Path |
+|--------|------|
+| GET | `/admin/oauth2/auth/requests/login?login_challenge=` |
+| PUT | `/admin/oauth2/auth/requests/login/accept?login_challenge=` |
+| PUT | `/admin/oauth2/auth/requests/login/reject?login_challenge=` |
+| GET | `/admin/oauth2/auth/requests/consent?consent_challenge=` |
+| PUT | `/admin/oauth2/auth/requests/consent/accept?consent_challenge=` |
+| PUT | `/admin/oauth2/auth/requests/consent/reject?consent_challenge=` |
+
+`accept_token` is always returned by Get*; required on Accept/Reject only when `admin.accept_strict` is true.
 
 Public Dynamic Client Registration (`/oauth2/register`) is **not** part of Admin API.
 

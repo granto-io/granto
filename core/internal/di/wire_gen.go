@@ -8,6 +8,7 @@ package di
 
 import (
 	"github.com/granto-io/granto/core/internal/app"
+	"github.com/granto-io/granto/core/internal/oauth2"
 	"github.com/granto-io/granto/core/internal/repository/postgres"
 	"github.com/granto-io/granto/core/internal/repository/redis"
 	"github.com/granto-io/granto/core/internal/transport/admin"
@@ -24,25 +25,27 @@ func InitializeApp(configPath ConfigPath) (*app.App, error) {
 		return nil, err
 	}
 	logger := provideLogger(config)
-	handler := public.NewHandler(logger)
-	httpHandler := providePublicRouter(handler, logger)
 	db, err := provideDB(config)
 	if err != nil {
 		return nil, err
 	}
+	clientRepository := postgres.NewClientRepository(db)
 	client, err := provideRedis(config)
 	if err != nil {
 		return nil, err
 	}
-	loginSessionRepository := postgres.NewLoginSessionRepository(db)
 	loginChallengeRepository := redis.NewLoginChallengeRepository(client)
 	consentChallengeRepository := redis.NewConsentChallengeRepository(client)
+	loginSessionRepository := postgres.NewLoginSessionRepository(db)
 	flowVerifierRepository := redis.NewFlowVerifierRepository(client)
 	authorizationCodeRepository := redis.NewAuthorizationCodeRepository(client)
 	tokenRepository := redis.NewTokenRepository(client)
-	clientRepository := postgres.NewClientRepository(db)
+	flow := oauth2.NewFlow(config, clientRepository, loginChallengeRepository, consentChallengeRepository, loginSessionRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository)
+	handler := public.NewHandler(logger, config, flow)
+	httpHandler := providePublicRouter(handler, logger)
 	clientServer := admin.NewClientServer(clientRepository)
-	server := admin.NewServer(clientServer, config)
+	oAuth2Server := admin.NewOAuth2Server(flow)
+	server := admin.NewServer(clientServer, oAuth2Server, config)
 	appApp := app.NewApp(config, logger, httpHandler, db, client, loginSessionRepository, loginChallengeRepository, consentChallengeRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository, server)
 	return appApp, nil
 }
