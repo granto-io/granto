@@ -21,4 +21,5 @@ var (
 	ErrRefreshTokenNotFound               = errors.New("refresh token not found")
 	ErrRefreshTokenExpired                = errors.New("refresh token expired")
 	ErrSigningKeyNotFound                 = errors.New("signing key not found")
+	ErrConsentGrantNotFound               = errors.New("consent grant not found")
 )

@@ -20,6 +20,8 @@ var PostgresSet = wire.NewSet(
 	wire.Bind(new(repository.ClientRepository), new(*repopg.ClientRepository)),
 	repopg.NewLoginSessionRepository,
 	wire.Bind(new(repository.LoginSessionRepository), new(*repopg.LoginSessionRepository)),
+	repopg.NewConsentGrantRepository,
+	wire.Bind(new(repository.ConsentGrantRepository), new(*repopg.ConsentGrantRepository)),
 )
 
 func provideDB(cfg *config.Config) (*postgres.DB, error) {

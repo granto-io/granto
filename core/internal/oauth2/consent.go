@@ -63,12 +63,6 @@ func (f *Flow) AcceptConsent(ctx context.Context, in AcceptConsentInput) (redire
 		audience = ch.RequestedAudience
 	}
 
-	rawCode, err := newRawSecret()
-	if err != nil {
-		return "", fmt.Errorf("generate authorization code: %w", err)
-	}
-
-	now := time.Now().UTC()
 	extra := map[string]any{}
 	if in.SessionAccess != nil {
 		extra["access_token"] = in.SessionAccess
@@ -82,51 +76,30 @@ func (f *Flow) AcceptConsent(ctx context.Context, in AcceptConsentInput) (redire
 		extra["context"] = ch.Context
 	}
 
-	code := &domain.AuthorizationCode{
-		CodeHash:            domain.HashAuthorizationCode(rawCode),
+	redirect, err := f.issueConsentCodeAndVerifier(ctx, consentIssueParams{
 		TenantID:            ch.TenantID,
 		ClientID:            ch.ClientID,
 		Subject:             ch.Subject,
 		SessionID:           ch.SessionID,
 		RedirectURI:         ch.RedirectURI,
+		State:               ch.State,
 		Scopes:              scopes,
 		Audience:            audience,
 		Nonce:               ch.Nonce,
 		CodeChallenge:       ch.CodeChallenge,
 		CodeChallengeMethod: ch.CodeChallengeMethod,
 		ConsentChallengeID:  ch.ID,
-		ExtraClaims:         extra,
-		ExpiresAt:           now.Add(defaultAuthCodeTTL),
-		CreatedAt:           now,
-	}
-	if err := f.authCodes.Create(ctx, code); err != nil {
-		return "", fmt.Errorf("store authorization code: %w", err)
-	}
-
-	clientURL, err := buildClientCallbackURL(ch.RedirectURI, rawCode, ch.State)
+		Extra:               extra,
+	})
 	if err != nil {
 		return "", err
 	}
 
-	verifier := &domain.FlowVerifier{
-		TenantID:   ch.TenantID,
-		Kind:       domain.FlowVerifierKindConsent,
-		SessionID:  ch.SessionID,
-		RedirectTo: clientURL,
-		ExpiresAt:  now.Add(defaultVerifierTTL),
-		CreatedAt:  now,
-	}
-	if verifier.SessionID == uuid.Nil {
-		return "", fmt.Errorf("%w: consent challenge missing session", ErrInvalidRequest)
-	}
-	if err := f.flowVerifiers.Create(ctx, verifier); err != nil {
-		return "", fmt.Errorf("create flow verifier: %w", err)
+	if err := f.rememberConsentGrant(ctx, ch.Subject, ch.ClientID, scopes, audience, in.Remember, in.RememberFor); err != nil {
+		return "", err
 	}
 
-	_ = in.Remember
-	_ = in.RememberFor // ConsentGrant later
-
-	return buildASVerifierURL(f.issuer(), domain.FlowVerifierKindConsent, verifier.ID), nil
+	return redirect, nil
 }
 
 // RejectConsent deletes the consent challenge and returns an error redirect (via verifier when possible).

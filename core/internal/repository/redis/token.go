@@ -97,9 +97,32 @@ func (r *TokenRepository) GetAccessToken(ctx context.Context, tenantID uuid.UUID
 		return nil, fmt.Errorf("unmarshal access token: %w", err)
 	}
 	if t.IsExpired() {
-		return nil, domain.ErrAccessTokenExpired
+		return &t, domain.ErrAccessTokenExpired
 	}
 	return &t, nil
+}
+
+func (r *TokenRepository) RevokeAccessToken(ctx context.Context, tenantID uuid.UUID, tokenHash string) error {
+	key := accessTokenKey(tenantID, tokenHash)
+	data, err := r.rdb.Get(ctx, key).Bytes()
+	if err == goredis.Nil {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get access token for revoke: %w", err)
+	}
+	var t domain.AccessToken
+	_ = json.Unmarshal(data, &t)
+
+	pipe := r.rdb.Pipeline()
+	pipe.Del(ctx, key)
+	if t.JTI != "" {
+		pipe.Del(ctx, accessTokenJTIKey(tenantID, t.JTI))
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("revoke access token: %w", err)
+	}
+	return nil
 }
 
 func (r *TokenRepository) RevokeAccessTokenByJTI(ctx context.Context, tenantID uuid.UUID, jti string) error {
@@ -175,7 +198,7 @@ func (r *TokenRepository) GetRefreshToken(ctx context.Context, tenantID uuid.UUI
 		return nil, fmt.Errorf("unmarshal refresh token: %w", err)
 	}
 	if t.IsExpired() {
-		return nil, domain.ErrRefreshTokenExpired
+		return &t, domain.ErrRefreshTokenExpired
 	}
 	return &t, nil
 }

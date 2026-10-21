@@ -95,6 +95,31 @@ func (f *Flow) AcceptLogin(ctx context.Context, in AcceptLoginInput) (redirectTo
 		return "", fmt.Errorf("create login session: %w", err)
 	}
 
+	client, err := f.clients.GetByClientID(ctx, f.tenantID(), ch.ClientID)
+	if err != nil {
+		return "", err
+	}
+	if f.canSkipConsentUI(ctx, client, in.Subject, ch.RequestedScopes, ch.RequestedAudience) {
+		extra := map[string]any{}
+		if in.Context != nil {
+			extra["context"] = in.Context
+		}
+		return f.issueConsentCodeAndVerifier(ctx, consentIssueParams{
+			TenantID:            ch.TenantID,
+			ClientID:            ch.ClientID,
+			Subject:             in.Subject,
+			SessionID:           session.ID,
+			RedirectURI:         ch.RedirectURI,
+			State:               ch.State,
+			Scopes:              ch.RequestedScopes,
+			Audience:            ch.RequestedAudience,
+			Nonce:               ch.Nonce,
+			CodeChallenge:       ch.CodeChallenge,
+			CodeChallengeMethod: ch.CodeChallengeMethod,
+			Extra:               extra,
+		})
+	}
+
 	consent := &domain.ConsentChallenge{
 		TenantID:            ch.TenantID,
 		LoginChallengeID:    ch.ID,

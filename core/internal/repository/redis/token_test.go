@@ -62,11 +62,29 @@ func TestTokenRepositoryAccessTokenCreateGetRevoke(t *testing.T) {
 		t.Fatalf("GetAccessToken mismatch: %#v", got)
 	}
 
-	if err := repo.RevokeAccessTokenByJTI(ctx, at.TenantID, at.JTI); err != nil {
-		t.Fatalf("RevokeAccessTokenByJTI: %v", err)
+	if err := repo.RevokeAccessToken(ctx, at.TenantID, at.TokenHash); err != nil {
+		t.Fatalf("RevokeAccessToken: %v", err)
 	}
 	if _, err := repo.GetAccessToken(ctx, at.TenantID, at.TokenHash); !errors.Is(err, domain.ErrAccessTokenNotFound) {
 		t.Fatalf("Get after revoke: err=%v", err)
+	}
+
+	at2 := &domain.AccessToken{
+		TokenHash: domain.HashToken("access-raw-2"),
+		JTI:       uuid.NewString(),
+		TenantID:  domain.DefaultTenantID,
+		ClientID:  "app-a",
+		Subject:   "user-42",
+		ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := repo.CreateAccessToken(ctx, at2); err != nil {
+		t.Fatalf("CreateAccessToken 2: %v", err)
+	}
+	if err := repo.RevokeAccessTokenByJTI(ctx, at2.TenantID, at2.JTI); err != nil {
+		t.Fatalf("RevokeAccessTokenByJTI: %v", err)
+	}
+	if _, err := repo.GetAccessToken(ctx, at2.TenantID, at2.TokenHash); !errors.Is(err, domain.ErrAccessTokenNotFound) {
+		t.Fatalf("Get after ByJTI revoke: err=%v", err)
 	}
 }
 

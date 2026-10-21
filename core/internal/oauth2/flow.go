@@ -33,6 +33,7 @@ type Flow struct {
 	flowVerifiers     repository.FlowVerifierRepository
 	authCodes         repository.AuthorizationCodeRepository
 	tokens            repository.TokenRepository
+	consentGrants     repository.ConsentGrantRepository
 	idTokens          *oidc.IDTokens
 }
 
@@ -46,6 +47,7 @@ func NewFlow(
 	flowVerifiers repository.FlowVerifierRepository,
 	authCodes repository.AuthorizationCodeRepository,
 	tokens repository.TokenRepository,
+	consentGrants repository.ConsentGrantRepository,
 	idTokens *oidc.IDTokens,
 ) *Flow {
 	return &Flow{
@@ -57,6 +59,7 @@ func NewFlow(
 		flowVerifiers:     flowVerifiers,
 		authCodes:         authCodes,
 		tokens:            tokens,
+		consentGrants:     consentGrants,
 		idTokens:          idTokens,
 	}
 }

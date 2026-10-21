@@ -132,6 +132,12 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 			RefreshToken: r.FormValue("refresh_token"),
 			Scope:        r.FormValue("scope"),
 		})
+	case "client_credentials":
+		resp, err = h.flow.ClientCredentials(r.Context(), oauth2.ClientCredentialsInput{
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			Scope:        r.FormValue("scope"),
+		})
 	case "":
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "grant_type is required")
 		return
@@ -159,6 +165,8 @@ func (h *Handler) writeTokenError(w http.ResponseWriter, err error) {
 		errors.Is(err, oauth2.ErrSessionExpired),
 		errors.Is(err, oauth2.ErrTokenNotFound):
 		writeOAuthError(w, http.StatusBadRequest, "invalid_grant", err.Error())
+	case errors.Is(err, oauth2.ErrInvalidScope):
+		writeOAuthError(w, http.StatusBadRequest, "invalid_scope", err.Error())
 	case errors.Is(err, oauth2.ErrPKCERequired),
 		errors.Is(err, oauth2.ErrInvalidRequest):
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", err.Error())
@@ -185,9 +193,53 @@ func parseBasicAuth(header string) (user, pass string, ok bool) {
 }
 
 func (h *Handler) handleRevoke(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w, r, "revocation")
+	if h.flow == nil {
+		h.notImplemented(w, r, "revocation")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "invalid form body")
+		return
+	}
+	clientID, clientSecret := r.FormValue("client_id"), r.FormValue("client_secret")
+	if id, secret, ok := parseBasicAuth(r.Header.Get("Authorization")); ok {
+		clientID, clientSecret = id, secret
+	}
+	err := h.flow.Revoke(r.Context(), oauth2.RevokeInput{
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
+		Token:         r.FormValue("token"),
+		TokenTypeHint: r.FormValue("token_type_hint"),
+	})
+	if err != nil {
+		h.writeTokenError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) handleIntrospect(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w, r, "introspection")
+	if h.flow == nil {
+		h.notImplemented(w, r, "introspection")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "invalid form body")
+		return
+	}
+	clientID, clientSecret := r.FormValue("client_id"), r.FormValue("client_secret")
+	if id, secret, ok := parseBasicAuth(r.Header.Get("Authorization")); ok {
+		clientID, clientSecret = id, secret
+	}
+	resp, err := h.flow.Introspect(r.Context(), oauth2.IntrospectInput{
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
+		Token:         r.FormValue("token"),
+		TokenTypeHint: r.FormValue("token_type_hint"),
+	})
+	if err != nil {
+		h.writeTokenError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
