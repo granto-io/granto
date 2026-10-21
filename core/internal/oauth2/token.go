@@ -167,6 +167,7 @@ type issueTokenOpts struct {
 	extra       map[string]any
 	nonce       string
 	skipRefresh bool
+	skipIDToken bool
 }
 
 func (f *Flow) issueTokens(ctx context.Context, client *domain.Client, opts issueTokenOpts) (*TokenResponse, error) {
@@ -200,10 +201,12 @@ func (f *Flow) issueTokens(ctx context.Context, client *domain.Client, opts issu
 		Scope:       strings.Join(opts.scopes, " "),
 	}
 
-	if idToken, err := f.issueIDToken(ctx, client, opts); err != nil {
-		return nil, err
-	} else if idToken != "" {
-		resp.IDToken = idToken
+	if !opts.skipIDToken {
+		if idToken, err := f.issueIDToken(ctx, client, opts); err != nil {
+			return nil, err
+		} else if idToken != "" {
+			resp.IDToken = idToken
+		}
 	}
 
 	if opts.skipRefresh {

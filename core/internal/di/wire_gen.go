@@ -41,13 +41,14 @@ func InitializeApp(configPath ConfigPath) (*app.App, error) {
 	flowVerifierRepository := redis.NewFlowVerifierRepository(client)
 	authorizationCodeRepository := redis.NewAuthorizationCodeRepository(client)
 	tokenRepository := redis.NewTokenRepository(client)
+	consentGrantRepository := postgres.NewConsentGrantRepository(db)
 	signingKeyRepository := postgres.NewSigningKeyRepository(db)
 	manager, err := provideKeyManager(config, signingKeyRepository, logger)
 	if err != nil {
 		return nil, err
 	}
 	idTokens := oidc.NewIDTokens(config, manager)
-	flow := oauth2.NewFlow(config, clientRepository, loginChallengeRepository, consentChallengeRepository, loginSessionRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository, idTokens)
+	flow := oauth2.NewFlow(config, clientRepository, loginChallengeRepository, consentChallengeRepository, loginSessionRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository, consentGrantRepository, idTokens)
 	discovery := oidc.NewDiscovery(config)
 	handler := public.NewHandler(logger, config, flow, manager, discovery)
 	httpHandler := providePublicRouter(handler, logger)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/granto-io/granto/core/internal/config"
 	"github.com/granto-io/granto/core/internal/domain"
@@ -256,6 +257,39 @@ func (m *memClients) Create(context.Context, *domain.Client) error { return nil 
 func (m *memClients) Update(context.Context, *domain.Client) error { return nil }
 func (m *memClients) Delete(context.Context, uuid.UUID) error      { return nil }
 
+type memGrants struct {
+	byKey map[string]*domain.ConsentGrant
+}
+
+func grantKey(subject, clientID string) string { return subject + "\x00" + clientID }
+
+func (m *memGrants) Upsert(_ context.Context, g *domain.ConsentGrant) error {
+	if m.byKey == nil {
+		m.byKey = map[string]*domain.ConsentGrant{}
+	}
+	if g.ID == uuid.Nil {
+		g.ID = uuid.New()
+	}
+	cp := *g
+	if cp.Scopes != nil {
+		cp.Scopes = append([]string(nil), g.Scopes...)
+	}
+	m.byKey[grantKey(g.Subject, g.ClientID)] = &cp
+	return nil
+}
+func (m *memGrants) Get(_ context.Context, _ uuid.UUID, subject, clientID string) (*domain.ConsentGrant, error) {
+	g, ok := m.byKey[grantKey(subject, clientID)]
+	if !ok || g.IsExpired() {
+		return nil, domain.ErrConsentGrantNotFound
+	}
+	cp := *g
+	return &cp, nil
+}
+func (m *memGrants) Delete(_ context.Context, _ uuid.UUID, subject, clientID string) error {
+	delete(m.byKey, grantKey(subject, clientID))
+	return nil
+}
+
 type testDeps struct {
 	flow    *oauth2.Flow
 	login   *memLoginChallenges
@@ -264,6 +298,7 @@ type testDeps struct {
 	codes   *memCodes
 	tokens  *memTokens
 	sess    *memSessions
+	grants  *memGrants
 }
 
 func newTestFlow(t *testing.T, strict bool) *testDeps {
@@ -290,6 +325,7 @@ func newTestFlow(t *testing.T, strict bool) *testDeps {
 		codes:   &memCodes{},
 		tokens:  &memTokens{},
 		sess:    &memSessions{},
+		grants:  &memGrants{},
 		clients: &memClients{byID: map[string]*domain.Client{
 			"app-a": {
 				ClientID:      "app-a",
@@ -303,7 +339,7 @@ func newTestFlow(t *testing.T, strict bool) *testDeps {
 			},
 		}},
 	}
-	d.flow = oauth2.NewFlow(cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{}, d.codes, d.tokens, nil)
+	d.flow = oauth2.NewFlow(cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{}, d.codes, d.tokens, d.grants, nil)
 	return d
 }
 
@@ -326,9 +362,24 @@ func (m *memTokens) GetAccessToken(_ context.Context, _ uuid.UUID, hash string) 
 		return nil, domain.ErrAccessTokenNotFound
 	}
 	cp := *t
+	if cp.IsExpired() {
+		return &cp, domain.ErrAccessTokenExpired
+	}
 	return &cp, nil
 }
-func (m *memTokens) RevokeAccessTokenByJTI(context.Context, uuid.UUID, string) error { return nil }
+func (m *memTokens) RevokeAccessToken(_ context.Context, _ uuid.UUID, hash string) error {
+	delete(m.at, hash)
+	return nil
+}
+func (m *memTokens) RevokeAccessTokenByJTI(_ context.Context, _ uuid.UUID, jti string) error {
+	for h, t := range m.at {
+		if t.JTI == jti {
+			delete(m.at, h)
+			return nil
+		}
+	}
+	return nil
+}
 func (m *memTokens) CreateRefreshToken(_ context.Context, t *domain.RefreshToken) error {
 	if m.rt == nil {
 		m.rt = map[string]*domain.RefreshToken{}
@@ -343,6 +394,9 @@ func (m *memTokens) GetRefreshToken(_ context.Context, _ uuid.UUID, hash string)
 		return nil, domain.ErrRefreshTokenNotFound
 	}
 	cp := *t
+	if cp.IsExpired() {
+		return &cp, domain.ErrRefreshTokenExpired
+	}
 	return &cp, nil
 }
 func (m *memTokens) RotateRefreshToken(_ context.Context, _ uuid.UUID, oldHash string, next *domain.RefreshToken) error {
@@ -511,7 +565,7 @@ func TestAuthorizeSSOSkipsToConsent(t *testing.T) {
 	if err := sessions.Create(ctx, sess); err != nil {
 		t.Fatalf("Create session: %v", err)
 	}
-	f := oauth2.NewFlow(cfg, clients, lc, cc, sessions, &memVerifiers{}, &memCodes{}, &memTokens{}, nil)
+	f := oauth2.NewFlow(cfg, clients, lc, cc, sessions, &memVerifiers{}, &memCodes{}, &memTokens{}, &memGrants{}, nil)
 
 	res, err := f.Authorize(ctx, oauth2.AuthorizeInput{
 		ClientID:          "app-a",
@@ -524,11 +578,15 @@ func TestAuthorizeSSOSkipsToConsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Authorize SSO: %v", err)
 	}
-	if !strings.Contains(res.RedirectTo, "consent_challenge=") {
-		t.Fatalf("SSO RedirectTo = %q, want consent", res.RedirectTo)
+	// SkipConsent=true → issue code via consent_verifier (no consent UI).
+	if !strings.Contains(res.RedirectTo, "consent_verifier=") {
+		t.Fatalf("SSO RedirectTo = %q, want consent_verifier", res.RedirectTo)
 	}
 	if len(lc.byID) != 0 {
 		t.Fatal("SSO should not create login challenge")
+	}
+	if len(cc.byID) != 0 {
+		t.Fatal("SkipConsent should not create consent challenge")
 	}
 }
 
@@ -619,5 +677,187 @@ func TestExchangeCodeAndRefresh(t *testing.T) {
 	})
 	if !errors.Is(err, oauth2.ErrInvalidGrant) {
 		t.Fatalf("old RT reuse: err=%v, want invalid_grant", err)
+	}
+}
+
+func TestRevokeAndIntrospect(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	d := newTestFlow(t, false)
+
+	rawAT := "opaque-access-token-value"
+	at := &domain.AccessToken{
+		TokenHash: domain.HashToken(rawAT),
+		JTI:       uuid.NewString(),
+		TenantID:  domain.DefaultTenantID,
+		ClientID:  "app-a",
+		Subject:   "user-1",
+		Scopes:    []string{"openid"},
+		IssuedAt:  time.Now().UTC(),
+		ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := d.tokens.CreateAccessToken(ctx, at); err != nil {
+		t.Fatalf("CreateAccessToken: %v", err)
+	}
+
+	intro, err := d.flow.Introspect(ctx, oauth2.IntrospectInput{
+		ClientID: "app-a",
+		Token:    rawAT,
+	})
+	if err != nil {
+		t.Fatalf("Introspect: %v", err)
+	}
+	if !intro.Active || intro.Sub != "user-1" || intro.TokenType != "Bearer" {
+		t.Fatalf("introspect = %+v", intro)
+	}
+
+	if err := d.flow.Revoke(ctx, oauth2.RevokeInput{
+		ClientID: "app-a",
+		Token:    rawAT,
+	}); err != nil {
+		t.Fatalf("Revoke: %v", err)
+	}
+
+	intro2, err := d.flow.Introspect(ctx, oauth2.IntrospectInput{
+		ClientID: "app-a",
+		Token:    rawAT,
+	})
+	if err != nil {
+		t.Fatalf("Introspect after revoke: %v", err)
+	}
+	if intro2.Active {
+		t.Fatal("token still active after revoke")
+	}
+
+	// Unknown token: still OK.
+	if err := d.flow.Revoke(ctx, oauth2.RevokeInput{
+		ClientID: "app-a",
+		Token:    "never-issued",
+	}); err != nil {
+		t.Fatalf("Revoke unknown: %v", err)
+	}
+}
+
+func TestClientCredentials(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	d := newTestFlow(t, false)
+
+	secret := "super-secret-client"
+	hash, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("bcrypt: %v", err)
+	}
+	d.clients.byID["svc"] = &domain.Client{
+		ClientID:                "svc",
+		TenantID:                domain.DefaultTenantID,
+		ClientType:              domain.ClientTypeConfidential,
+		ClientSecretHash:        string(hash),
+		TokenEndpointAuthMethod: domain.TokenEndpointAuthClientSecretPost,
+		GrantTypes:              []domain.GrantType{domain.GrantTypeClientCredentials},
+		AllowedScopes:           []string{"api.read", "api.write"},
+		DefaultScopes:           []string{"api.read"},
+		Audience:                []string{"https://api.example"},
+	}
+
+	tok, err := d.flow.ClientCredentials(ctx, oauth2.ClientCredentialsInput{
+		ClientID:     "svc",
+		ClientSecret: secret,
+		Scope:        "api.read",
+	})
+	if err != nil {
+		t.Fatalf("ClientCredentials: %v", err)
+	}
+	if tok.AccessToken == "" || tok.RefreshToken != "" || tok.IDToken != "" {
+		t.Fatalf("unexpected tokens: %+v", tok)
+	}
+	if tok.Scope != "api.read" {
+		t.Fatalf("scope = %q", tok.Scope)
+	}
+
+	intro, err := d.flow.Introspect(ctx, oauth2.IntrospectInput{
+		ClientID:     "svc",
+		ClientSecret: secret,
+		Token:        tok.AccessToken,
+	})
+	if err != nil {
+		t.Fatalf("Introspect: %v", err)
+	}
+	if !intro.Active || intro.Sub != "svc" || intro.ClientID != "svc" {
+		t.Fatalf("introspect = %+v", intro)
+	}
+
+	_, err = d.flow.ClientCredentials(ctx, oauth2.ClientCredentialsInput{
+		ClientID:     "svc",
+		ClientSecret: secret,
+		Scope:        "openid",
+	})
+	if !errors.Is(err, oauth2.ErrInvalidScope) {
+		t.Fatalf("bad scope: err=%v", err)
+	}
+
+	_, err = d.flow.ClientCredentials(ctx, oauth2.ClientCredentialsInput{
+		ClientID: "app-a", // public test client
+	})
+	if !errors.Is(err, oauth2.ErrUnauthorizedClient) {
+		t.Fatalf("public client: err=%v", err)
+	}
+}
+
+func TestConsentGrantRememberAndSkip(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	d := newTestFlow(t, false)
+
+	ch := sampleLoginChallenge(t)
+	if err := d.login.Create(ctx, ch); err != nil {
+		t.Fatalf("Create login: %v", err)
+	}
+	redirect, err := d.flow.AcceptLogin(ctx, oauth2.AcceptLoginInput{
+		ChallengeID: ch.ID.String(),
+		Subject:     "user-1",
+	})
+	if err != nil {
+		t.Fatalf("AcceptLogin: %v", err)
+	}
+	if !strings.Contains(redirect, "login_verifier=") {
+		t.Fatalf("first AcceptLogin = %q", redirect)
+	}
+	var consent *domain.ConsentChallenge
+	for _, c := range d.consent.byID {
+		consent = c
+	}
+	if consent == nil {
+		t.Fatal("expected consent challenge")
+	}
+	if _, err := d.flow.AcceptConsent(ctx, oauth2.AcceptConsentInput{
+		ChallengeID: consent.ID.String(),
+		GrantScope:  []string{"openid"},
+		Remember:    true,
+		RememberFor: 3600,
+	}); err != nil {
+		t.Fatalf("AcceptConsent remember: %v", err)
+	}
+	if len(d.grants.byKey) != 1 {
+		t.Fatalf("grants = %d, want 1", len(d.grants.byKey))
+	}
+
+	// Second login with same subject/client should skip consent UI.
+	ch2 := sampleLoginChallenge(t)
+	if err := d.login.Create(ctx, ch2); err != nil {
+		t.Fatalf("Create login 2: %v", err)
+	}
+	redirect2, err := d.flow.AcceptLogin(ctx, oauth2.AcceptLoginInput{
+		ChallengeID: ch2.ID.String(),
+		Subject:     "user-1",
+	})
+	if err != nil {
+		t.Fatalf("AcceptLogin 2: %v", err)
+	}
+	if !strings.Contains(redirect2, "consent_verifier=") {
+		t.Fatalf("remembered consent redirect = %q, want consent_verifier", redirect2)
+	}
+	if len(d.consent.byID) != 0 {
+		t.Fatal("remembered consent should not create a new consent challenge")
 	}
 }

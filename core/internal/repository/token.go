@@ -12,6 +12,7 @@ import (
 type TokenRepository interface {
 	CreateAccessToken(ctx context.Context, token *domain.AccessToken) error
 	GetAccessToken(ctx context.Context, tenantID uuid.UUID, tokenHash string) (*domain.AccessToken, error)
+	RevokeAccessToken(ctx context.Context, tenantID uuid.UUID, tokenHash string) error
 	RevokeAccessTokenByJTI(ctx context.Context, tenantID uuid.UUID, jti string) error
 
 	CreateRefreshToken(ctx context.Context, token *domain.RefreshToken) error

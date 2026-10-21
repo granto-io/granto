@@ -70,6 +70,7 @@ func (d *Discovery) Document() *DiscoveryDocument {
 
 		GrantTypesSupported: []string{
 			"authorization_code",
+			"client_credentials",
 			"refresh_token",
 		},
 

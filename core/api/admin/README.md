@@ -47,6 +47,8 @@ OAuth2 login/consent Admin (Hydra-compatible paths):
 
 `accept_token` is always returned by Get*; required on Accept/Reject only when `admin.accept_strict` is true.
 
+**Accept modes (default vs strict):** see [`ACCEPT_MODES.md`](./ACCEPT_MODES.md) — required reading before shipping a login/consent app against Admin.
+
 Public Dynamic Client Registration (`/oauth2/register`) is **not** part of Admin API.
 
 ## Conventions

@@ -105,6 +105,24 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 	}
 
 	if skipLogin {
+		if f.canSkipConsentUI(ctx, client, subject, scopes, nil) {
+			redirect, err := f.issueConsentCodeAndVerifier(ctx, consentIssueParams{
+				TenantID:            f.tenantID(),
+				ClientID:            client.ClientID,
+				Subject:             subject,
+				SessionID:           sessionID,
+				RedirectURI:         in.RedirectURI,
+				State:               in.State,
+				Scopes:              scopes,
+				Nonce:               in.Nonce,
+				CodeChallenge:       in.CodeChallenge,
+				CodeChallengeMethod: in.CodeChallengeMethod,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return &AuthorizeResult{RedirectTo: redirect}, nil
+		}
 		consent := &domain.ConsentChallenge{
 			TenantID:            f.tenantID(),
 			SessionID:           sessionID,
@@ -118,7 +136,7 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 			Nonce:               in.Nonce,
 			CodeChallenge:       in.CodeChallenge,
 			CodeChallengeMethod: in.CodeChallengeMethod,
-			Skip:                client.SkipConsent,
+			Skip:                false,
 			OIDCContext:         oidcCtx,
 			ExpiresAt:           now.Add(defaultChallengeTTL),
 			CreatedAt:           now,
