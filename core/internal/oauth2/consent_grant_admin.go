@@ -32,8 +32,19 @@ func (f *Flow) RevokeConsentGrants(ctx context.Context, subject, clientID string
 	}
 	clientID = strings.TrimSpace(clientID)
 	tenantID := f.resolveTenant(ctx)
+	var err error
 	if clientID != "" {
-		return f.consentGrants.Delete(ctx, tenantID, subject, clientID)
+		err = f.consentGrants.Delete(ctx, tenantID, subject, clientID)
+	} else {
+		err = f.consentGrants.DeleteBySubject(ctx, tenantID, subject)
 	}
-	return f.consentGrants.DeleteBySubject(ctx, tenantID, subject)
+	if err != nil {
+		return err
+	}
+	f.auditSuccess(ctx, domain.AuditEventConsentGrantRevoked, domain.AuditActorAdmin, subject, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectUser
+		e.SubjectID = subject
+		e.ClientID = clientID
+	})
+	return nil
 }

@@ -47,9 +47,11 @@ func (f *Flow) ExchangeCode(ctx context.Context, in ExchangeCodeInput) (*TokenRe
 		return nil, err
 	}
 	if !client.HasGrantType(domain.GrantTypeAuthorizationCode) {
+		f.auditTokenFailure(ctx, in.ClientID, "unauthorized_client", map[string]any{"reason": "grant_type_not_allowed"})
 		return nil, ErrUnauthorizedClient
 	}
 	if strings.TrimSpace(in.Code) == "" || strings.TrimSpace(in.RedirectURI) == "" {
+		f.auditTokenFailure(ctx, in.ClientID, "invalid_request", map[string]any{"reason": "missing_code_or_redirect_uri"})
 		return nil, fmt.Errorf("%w: code and redirect_uri are required", ErrInvalidRequest)
 	}
 
@@ -58,22 +60,27 @@ func (f *Flow) ExchangeCode(ctx context.Context, in ExchangeCodeInput) (*TokenRe
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrAuthorizationCodeUsed):
+			f.auditTokenFailure(ctx, in.ClientID, "invalid_grant", map[string]any{"reason": "code_replay"})
 			return nil, ErrInvalidGrant
 		case errors.Is(err, domain.ErrAuthorizationCodeNotFound),
 			errors.Is(err, domain.ErrAuthorizationCodeExpired):
+			f.auditTokenFailure(ctx, in.ClientID, "invalid_grant", map[string]any{"reason": "code_invalid"})
 			return nil, ErrInvalidGrant
 		default:
 			return nil, err
 		}
 	}
 	if authCode.ClientID != in.ClientID || authCode.RedirectURI != in.RedirectURI {
+		f.auditTokenFailure(ctx, in.ClientID, "invalid_grant", map[string]any{"reason": "code_mismatch"})
 		return nil, ErrInvalidGrant
 	}
 	if authCode.CodeChallenge != "" {
 		if err := verifyCodeVerifier(in.CodeVerifier, authCode.CodeChallenge, authCode.CodeChallengeMethod); err != nil {
+			f.auditTokenFailure(ctx, in.ClientID, auditErrorCode(err), map[string]any{"reason": "pkce_failed"})
 			return nil, err
 		}
 	} else if client.IsPublic() || client.RequirePKCE {
+		f.auditTokenFailure(ctx, in.ClientID, "invalid_request", map[string]any{"reason": "pkce_required"})
 		return nil, ErrPKCERequired
 	}
 
@@ -95,18 +102,22 @@ func (f *Flow) RefreshToken(ctx context.Context, in RefreshTokenInput) (*TokenRe
 		return nil, err
 	}
 	if !client.HasGrantType(domain.GrantTypeRefreshToken) {
+		f.auditTokenFailure(ctx, in.ClientID, "unauthorized_client", map[string]any{"reason": "grant_type_not_allowed"})
 		return nil, ErrUnauthorizedClient
 	}
 	if strings.TrimSpace(in.RefreshToken) == "" {
+		f.auditTokenFailure(ctx, in.ClientID, "invalid_request", map[string]any{"reason": "missing_refresh_token"})
 		return nil, fmt.Errorf("%w: refresh_token is required", ErrInvalidRequest)
 	}
 
 	oldHash := domain.HashToken(in.RefreshToken)
 	old, err := f.tokens.GetRefreshToken(ctx, f.tenantID(), oldHash)
 	if err != nil {
+		f.auditTokenFailure(ctx, in.ClientID, "invalid_grant", map[string]any{"reason": "refresh_invalid"})
 		return nil, ErrInvalidGrant
 	}
 	if old.ClientID != in.ClientID {
+		f.auditTokenFailure(ctx, in.ClientID, "invalid_grant", map[string]any{"reason": "refresh_client_mismatch"})
 		return nil, ErrInvalidGrant
 	}
 	var sess *domain.LoginSession
@@ -115,6 +126,7 @@ func (f *Flow) RefreshToken(ctx context.Context, in RefreshTokenInput) (*TokenRe
 		sess, err = f.loginSessions.GetByID(ctx, old.SessionID)
 		if err != nil || sess.IsExpired() {
 			_ = f.tokens.RevokeRefreshToken(ctx, f.tenantID(), oldHash)
+			f.auditTokenFailure(ctx, in.ClientID, "invalid_grant", map[string]any{"reason": "session_expired"})
 			return nil, ErrSessionExpired
 		}
 	}
@@ -197,6 +209,18 @@ func (f *Flow) issueTokens(ctx context.Context, client *domain.Client, opts issu
 	if err := f.tokens.CreateAccessToken(ctx, at); err != nil {
 		return nil, fmt.Errorf("store access token: %w", err)
 	}
+	f.auditSuccess(ctx, domain.AuditEventTokenIssued, domain.AuditActorClient, client.ClientID, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectUser
+		e.SubjectID = opts.subject
+		e.ClientID = client.ClientID
+		if opts.sessionID != uuid.Nil {
+			e.SessionID = opts.sessionID.String()
+		}
+		e.Metadata = map[string]any{
+			"token_type": "access_token",
+			"scopes":     opts.scopes,
+		}
+	})
 
 	resp := &TokenResponse{
 		AccessToken: rawAT,

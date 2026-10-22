@@ -103,6 +103,12 @@ func (f *Flow) RegisterDynamicClient(ctx context.Context, in DynamicClientReques
 	if err := f.clients.Create(ctx, client); err != nil {
 		return nil, err
 	}
+	f.auditSuccess(ctx, domain.AuditEventClientCreated, domain.AuditActorSystem, client.ClientID, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectClient
+		e.SubjectID = client.ClientID
+		e.ClientID = client.ClientID
+		e.Metadata = map[string]any{"source": "dcr"}
+	})
 	return f.dynamicClientResponse(client, rawSecret, rawRAT), nil
 }
 
@@ -146,6 +152,12 @@ func (f *Flow) UpdateDynamicClient(ctx context.Context, clientID, registrationAc
 	if err := f.clients.Update(ctx, next); err != nil {
 		return nil, err
 	}
+	f.auditSuccess(ctx, domain.AuditEventClientUpdated, domain.AuditActorSystem, next.ClientID, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectClient
+		e.SubjectID = next.ClientID
+		e.ClientID = next.ClientID
+		e.Metadata = map[string]any{"source": "dcr"}
+	})
 	return f.dynamicClientResponse(next, "", rawRAT), nil
 }
 
@@ -155,7 +167,16 @@ func (f *Flow) DeleteDynamicClient(ctx context.Context, clientID, registrationAc
 	if err != nil {
 		return err
 	}
-	return f.clients.Delete(ctx, client.TenantID, client.ID)
+	if err := f.clients.Delete(ctx, client.TenantID, client.ID); err != nil {
+		return err
+	}
+	f.auditSuccess(ctx, domain.AuditEventClientDeleted, domain.AuditActorSystem, client.ClientID, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectClient
+		e.SubjectID = client.ClientID
+		e.ClientID = client.ClientID
+		e.Metadata = map[string]any{"source": "dcr"}
+	})
+	return nil
 }
 
 func (f *Flow) dcrEnabled() bool {

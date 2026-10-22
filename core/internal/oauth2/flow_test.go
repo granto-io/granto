@@ -443,7 +443,7 @@ func newTestFlow(t *testing.T, strict bool) *testDeps {
 			},
 		}},
 	}
-	d.flow = oauth2.NewFlow(cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{}, d.codes, d.tokens, d.grants, nil)
+	d.flow = oauth2.NewFlow(cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{}, d.codes, d.tokens, d.grants, nil, nil)
 	return d
 }
 
@@ -714,7 +714,7 @@ func TestAuthorizeSSOSkipsToConsent(t *testing.T) {
 	if err := sessions.Create(ctx, sess); err != nil {
 		t.Fatalf("Create session: %v", err)
 	}
-	f := oauth2.NewFlow(cfg, clients, lc, cc, sessions, &memVerifiers{}, &memCodes{}, &memTokens{}, &memGrants{}, nil)
+	f := oauth2.NewFlow(cfg, clients, lc, cc, sessions, &memVerifiers{}, &memCodes{}, &memTokens{}, &memGrants{}, nil, nil)
 
 	res, err := f.Authorize(ctx, oauth2.AuthorizeInput{
 		ClientID:          "app-a",
@@ -852,7 +852,7 @@ func TestRefreshTokenLoadsSessionOnceWithIDToken(t *testing.T) {
 	}
 	d.flow = oauth2.NewFlow(
 		d.cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{},
-		d.codes, d.tokens, d.grants, oidc.NewIDTokens(d.cfg, keyMgr),
+		d.codes, d.tokens, d.grants, oidc.NewIDTokens(d.cfg, keyMgr), nil,
 	)
 
 	sess := &domain.LoginSession{

@@ -38,10 +38,12 @@ type Flow struct {
 	tokens            repository.TokenRepository
 	consentGrants     repository.ConsentGrantRepository
 	idTokens          *oidc.IDTokens
-	httpClient        *http.Client // back-channel logout override (tests); nil → SSRF-safe client
+	audits            repository.AuditRepository // optional; nil = no audit
+	httpClient        *http.Client               // back-channel logout override (tests); nil → SSRF-safe client
 }
 
 // NewFlow constructs an OAuth2 flow orchestrator.
+// audits may be nil (tests / disabled); Log calls become no-ops.
 func NewFlow(
 	cfg *config.Config,
 	clients repository.ClientRepository,
@@ -53,6 +55,7 @@ func NewFlow(
 	tokens repository.TokenRepository,
 	consentGrants repository.ConsentGrantRepository,
 	idTokens *oidc.IDTokens,
+	audits repository.AuditRepository,
 ) *Flow {
 	return &Flow{
 		cfg:               cfg,
@@ -65,6 +68,7 @@ func NewFlow(
 		tokens:            tokens,
 		consentGrants:     consentGrants,
 		idTokens:          idTokens,
+		audits:            audits,
 	}
 }
 

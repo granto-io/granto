@@ -73,6 +73,8 @@ Remembered consent grants (`ConsentGrant`):
 
 Revoke removes the grant row so the next authorize shows consent UI again. Unlike Hydra, outstanding AT/RT are **not** invalidated here yet (no revoke-by-subject index). Query param is `client_id` (Hydra used `client`).
 
+Audit events are **not** listed via Admin API. Core emits a stream (Postgres outbox → configured channels: `stdout`, `webhook`). See `audit` in config / `internal/config/README.md`.
+
 Public Dynamic Client Registration (`/oauth2/register`) is **not** part of Admin API.
 
 ## Conventions

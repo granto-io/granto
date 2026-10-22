@@ -36,7 +36,10 @@ func NewServer(
 	cfg *config.Config,
 ) *Server {
 	grpcSrv := grpc.NewServer(
-		grpc.UnaryInterceptor(bearerAuthInterceptor(cfg.Admin.Token)),
+		grpc.ChainUnaryInterceptor(
+			bearerAuthInterceptor(cfg.Admin.Token),
+			reqmetaUnaryInterceptor(),
+		),
 	)
 	adminv1.RegisterClientServiceServer(grpcSrv, clients)
 	adminv1.RegisterOAuth2ServiceServer(grpcSrv, oauth2)
@@ -77,6 +80,7 @@ func (s *Server) RunGateway(ctx context.Context, httpAddr, grpcAddr string) erro
 
 	mux := runtime.NewServeMux(
 		runtime.WithIncomingHeaderMatcher(incomingHeaderMatcher),
+		runtime.WithMetadata(gatewayRequestMetadata),
 	)
 	if err := adminv1.RegisterClientServiceHandler(ctx, mux, conn); err != nil {
 		_ = conn.Close()
@@ -94,10 +98,9 @@ func (s *Server) RunGateway(ctx context.Context, httpAddr, grpcAddr string) erro
 		_ = conn.Close()
 		return fmt.Errorf("register consent-grant gateway: %w", err)
 	}
-
 	s.httpSrv = &http.Server{
 		Addr:              httpAddr,
-		Handler:           mux,
+		Handler:           reqmetaMiddleware(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

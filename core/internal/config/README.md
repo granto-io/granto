@@ -129,6 +129,25 @@ Admin API access (MVP: static bearer; production may move to mTLS / OAuth).
 
 Env: `GRANTO_ADMIN_TOKEN`, `GRANTO_ADMIN_ACCEPT_STRICT`. Prefer env for `token` in production. IP allow-listing is out of MVP (network / reverse-proxy concern for now).
 
+### `audit`
+
+Stream-only audit (D-039): events go to a durable Postgres **outbox**, then to configured **channels**. There is **no** Admin list/query API — storage/SIEM is the operator’s choice (pipe `stdout` / `webhook` into ELK, ClickHouse, Vector, …).
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `enabled` | `true` | When `false`, emit is a no-op |
+| `channels` | `["stdout"]` | Delivery sinks: `stdout` (JSON lines), `webhook` (HTTP POST JSON) |
+| `webhook.url` | empty | Required if `webhook` is in `channels` |
+| `webhook.timeout` | `5s` | HTTP client timeout |
+| `outbox.poll_interval` | `1s` | Dispatcher tick |
+| `outbox.batch_size` | `50` | Rows claimed per tick |
+| `outbox.claim_lease` | `30s` | Lease while delivering (`FOR UPDATE SKIP LOCKED`) |
+| `outbox.max_attempts` | `10` | After this, row is dropped (error logged) |
+
+Env: `GRANTO_AUDIT_ENABLED`, `GRANTO_AUDIT_CHANNELS` (comma-separated), `GRANTO_AUDIT_WEBHOOK_URL`.
+
+At-least-once: a failed channel nacks the outbox row (retries may re-deliver to channels that already succeeded).
+
 ### `cors`
 
 Cross-Origin Resource Sharing on the public HTTP surface.

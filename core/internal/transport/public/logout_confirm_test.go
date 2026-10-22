@@ -18,7 +18,7 @@ func TestLogoutGETShowsConfirmForBroadScope(t *testing.T) {
 		Token:   config.TokenConfig{Issuer: "https://auth.example"},
 		Session: config.SessionConfig{LogoutScope: config.LogoutScopeSubject, DefaultTTL: time.Hour, MaxTTL: 24 * time.Hour},
 	}
-	flow := oauth2.NewFlow(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	flow := oauth2.NewFlow(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	h := NewHandler(nil, cfg, flow, nil, nil)
 	mux := NewRouter(h, Options{})
 
@@ -49,7 +49,7 @@ func TestLogoutGETSessionScopeDoesNotConfirm(t *testing.T) {
 		Token:   config.TokenConfig{Issuer: "https://auth.example"},
 		Session: config.SessionConfig{LogoutScope: config.LogoutScopeSession, DefaultTTL: time.Hour, MaxTTL: 24 * time.Hour},
 	}
-	flow := oauth2.NewFlow(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	flow := oauth2.NewFlow(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	h := NewHandler(slog.Default(), cfg, flow, nil, nil)
 	mux := NewRouter(h, Options{})
 
@@ -72,7 +72,7 @@ func TestLogoutGETSessionScopeConfirmOnCrossSiteWithoutHint(t *testing.T) {
 		Token:   config.TokenConfig{Issuer: "https://auth.example"},
 		Session: config.SessionConfig{LogoutScope: config.LogoutScopeSession, DefaultTTL: time.Hour, MaxTTL: 24 * time.Hour},
 	}
-	flow := oauth2.NewFlow(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	flow := oauth2.NewFlow(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	h := NewHandler(slog.Default(), cfg, flow, nil, nil)
 	mux := NewRouter(h, Options{})
 
@@ -94,7 +94,7 @@ func TestLogoutGETSessionScopeAllowsCrossSiteWithIDTokenHint(t *testing.T) {
 		Token:   config.TokenConfig{Issuer: "https://auth.example"},
 		Session: config.SessionConfig{LogoutScope: config.LogoutScopeSession, DefaultTTL: time.Hour, MaxTTL: 24 * time.Hour},
 	}
-	flow := oauth2.NewFlow(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	flow := oauth2.NewFlow(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	h := NewHandler(slog.Default(), cfg, flow, nil, nil)
 	mux := NewRouter(h, Options{})
 

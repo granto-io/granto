@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/granto-io/granto/core/internal/reqmeta"
 )
 
 // Middleware is the stdlib-compatible plugin form:
@@ -50,6 +52,7 @@ func NewRouter(h *Handler, opts Options) http.Handler {
 	r.Use(recoverer(logger))
 	r.Use(requestLogger(logger))
 	r.Use(noCache)
+	r.Use(reqmeta.Middleware)
 
 	for _, mw := range opts.Middlewares {
 		if mw != nil {

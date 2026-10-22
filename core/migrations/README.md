@@ -12,6 +12,8 @@ Naming: `NNNNNN_name.up.sql` / `NNNNNN_name.down.sql`.
 | 000004 | `create_login_sessions` — AS SSO sessions |
 | 000005 | `create_signing_keys` — AS signing keys (auto-gen path) |
 | 000006 | `create_consent_grants` — remembered consent (subject+client) |
+| 000007 | `login_sessions_device_id` — device id for logout_scope=device |
+| 000008 | `create_audit_log` — `audit_outbox` durable delivery buffer (stream-only) |
 
 `fs.go` embeds `*.sql` for the in-process runner (`internal/postgres.Migrate`). Repositories stay under `internal/repository/`; this folder is only the schema source of truth.
 

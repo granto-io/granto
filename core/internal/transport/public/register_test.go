@@ -33,7 +33,7 @@ func TestRegisterHTTPCreateAndManage(t *testing.T) {
 		Session: config.SessionConfig{DefaultTTL: time.Hour, MaxTTL: 24 * time.Hour},
 	}
 	clients := &dcrMemClients{byID: map[string]*domain.Client{}}
-	flow := oauth2.NewFlow(cfg, clients, nil, nil, nil, nil, nil, nil, nil, nil)
+	flow := oauth2.NewFlow(cfg, clients, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	h := public.NewHandler(nil, cfg, flow, nil, oidc.NewDiscovery(cfg))
 	mux := public.NewRouter(h, public.Options{})
 

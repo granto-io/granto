@@ -86,7 +86,7 @@ func TestHandleUserinfo(t *testing.T) {
 	cfg := &config.Config{
 		Token: config.TokenConfig{Issuer: "https://auth.example"},
 	}
-	flow := oauth2.NewFlow(cfg, uiStubClients{}, nil, nil, nil, nil, nil, tokens, nil, nil)
+	flow := oauth2.NewFlow(cfg, uiStubClients{}, nil, nil, nil, nil, nil, tokens, nil, nil, nil)
 	h := NewHandler(slog.Default(), cfg, flow, nil, nil)
 
 	raw := "ui-bearer-token"

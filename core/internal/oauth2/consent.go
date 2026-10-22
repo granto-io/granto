@@ -103,6 +103,20 @@ func (f *Flow) AcceptConsent(ctx context.Context, in AcceptConsentInput) (redire
 	if err != nil {
 		return "", err
 	}
+	// Audit immediately after the committed grant (code+verifier), matching AcceptLogin
+	// after loginSessions.Create. rememberConsentGrant may still fail — that must not
+	// erase ConsentAccepted for an already-issued authorization code.
+	f.auditSuccess(ctx, domain.AuditEventConsentAccepted, domain.AuditActorAdmin, ch.Subject, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectUser
+		e.SubjectID = ch.Subject
+		e.ClientID = ch.ClientID
+		e.SessionID = ch.SessionID.String()
+		e.Metadata = map[string]any{
+			"challenge_id": ch.ID.String(),
+			"scopes":       scopes,
+			"remember":     in.Remember,
+		}
+	})
 
 	if err := f.rememberConsentGrant(ctx, ch.Subject, ch.ClientID, scopes, audience, in.Remember, in.RememberFor); err != nil {
 		return "", err
@@ -130,6 +144,13 @@ func (f *Flow) RejectConsent(ctx context.Context, in RejectInput) (redirectTo st
 	if err := f.consentChallenges.Delete(ctx, f.tenantID(), id); err != nil {
 		return "", mapChallengeErr(err)
 	}
+	f.auditFailure(ctx, domain.AuditEventConsentRejected, domain.AuditActorAdmin, ch.Subject, in.Error, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectUser
+		e.SubjectID = ch.Subject
+		e.ClientID = ch.ClientID
+		e.SessionID = ch.SessionID.String()
+		e.Metadata = map[string]any{"challenge_id": ch.ID.String()}
+	})
 
 	clientURL, err := buildClientErrorURL(ch.RedirectURI, ch.State, in.Error, in.ErrorDescription, in.ErrorHint)
 	if err != nil {

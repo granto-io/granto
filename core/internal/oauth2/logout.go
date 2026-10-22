@@ -82,6 +82,28 @@ func (f *Flow) Logout(ctx context.Context, in LogoutInput) (*LogoutResult, error
 		// Best-effort: if revoke fails, session is kept (no orphan refresh tokens).
 		_ = f.deleteOneLoginSession(ctx, t.ID)
 	}
+	if len(targets) > 0 {
+		scope := f.cfg.Session.LogoutScope
+		if scope == "" {
+			scope = config.LogoutScopeSession
+		}
+		ids := make([]string, 0, len(targets))
+		subject := ""
+		for _, t := range targets {
+			ids = append(ids, t.ID.String())
+			if subject == "" {
+				subject = t.Subject
+			}
+		}
+		f.auditSuccess(ctx, domain.AuditEventLogout, domain.AuditActorUser, subject, func(e *domain.AuditEvent) {
+			e.SubjectType = domain.AuditSubjectUser
+			e.SubjectID = subject
+			e.Metadata = map[string]any{
+				"logout_scope": scope,
+				"session_ids":  ids,
+			}
+		})
+	}
 
 	out := &LogoutResult{
 		ClearCookie:            true,
@@ -226,6 +248,11 @@ func (f *Flow) deleteOneLoginSession(ctx context.Context, sessionID uuid.UUID) e
 		}
 		return err
 	}
+	f.auditSuccess(ctx, domain.AuditEventSessionDeleted, domain.AuditActorSystem, "", func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectSession
+		e.SubjectID = sessionID.String()
+		e.SessionID = sessionID.String()
+	})
 	return nil
 }
 

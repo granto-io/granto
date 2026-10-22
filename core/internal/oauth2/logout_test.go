@@ -252,6 +252,7 @@ func TestLogoutScopeSubjectIgnoresExpiredIDTokenHint(t *testing.T) {
 	d.flow = oauth2.NewFlow(
 		d.cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{},
 		d.codes, d.tokens, d.grants, oidc.NewIDTokens(d.cfg, keyMgr),
+		nil,
 	)
 
 	s1 := &domain.LoginSession{
@@ -336,6 +337,7 @@ func TestLogoutFrontAndBackChannel(t *testing.T) {
 	d.flow = oauth2.NewFlow(
 		d.cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{},
 		d.codes, d.tokens, d.grants, oidc.NewIDTokens(d.cfg, keyMgr),
+		nil,
 	)
 
 	var (

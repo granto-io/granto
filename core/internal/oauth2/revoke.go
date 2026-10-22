@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/granto-io/granto/core/internal/domain"
 )
 
@@ -62,6 +64,15 @@ func (f *Flow) revokeAccessIfOwned(ctx context.Context, clientID, hash string) b
 		return false
 	}
 	_ = f.tokens.RevokeAccessToken(ctx, f.tenantID(), hash)
+	f.auditSuccess(ctx, domain.AuditEventTokenRevoked, domain.AuditActorClient, clientID, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectUser
+		e.SubjectID = at.Subject
+		e.ClientID = clientID
+		if at.SessionID != uuid.Nil {
+			e.SessionID = at.SessionID.String()
+		}
+		e.Metadata = map[string]any{"token_type": "access_token"}
+	})
 	return true
 }
 
@@ -77,5 +88,14 @@ func (f *Flow) revokeRefreshIfOwned(ctx context.Context, clientID, hash string) 
 		return false
 	}
 	_ = f.tokens.RevokeRefreshToken(ctx, f.tenantID(), hash)
+	f.auditSuccess(ctx, domain.AuditEventTokenRevoked, domain.AuditActorClient, clientID, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectUser
+		e.SubjectID = rt.Subject
+		e.ClientID = clientID
+		if rt.SessionID != uuid.Nil {
+			e.SessionID = rt.SessionID.String()
+		}
+		e.Metadata = map[string]any{"token_type": "refresh_token"}
+	})
 	return true
 }

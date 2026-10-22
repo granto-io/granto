@@ -76,6 +76,19 @@ func defaults() *Config {
 				Enabled: false,
 			},
 		},
+		Audit: AuditConfig{
+			Enabled:  true,
+			Channels: []string{"stdout"},
+			Webhook: AuditWebhookConfig{
+				Timeout: 5 * time.Second,
+			},
+			Outbox: AuditOutboxConfig{
+				PollInterval: time.Second,
+				BatchSize:    50,
+				ClaimLease:   30 * time.Second,
+				MaxAttempts:  10,
+			},
+		},
 		CORS: CORSConfig{
 			Enabled:        false,
 			AllowedMethods: []string{"GET", "POST", "OPTIONS"},
@@ -166,6 +179,15 @@ func overrideFromEnv(cfg *Config) {
 	if v := os.Getenv("GRANTO_OIDC_DCR_DEFAULT_SCOPES"); v != "" {
 		cfg.OIDC.DynamicClientRegistration.DefaultScopes = splitComma(v)
 	}
+	if v := os.Getenv("GRANTO_AUDIT_ENABLED"); v != "" {
+		cfg.Audit.Enabled = v == "true" || v == "1"
+	}
+	if v := os.Getenv("GRANTO_AUDIT_CHANNELS"); v != "" {
+		cfg.Audit.Channels = splitComma(v)
+	}
+	if v := os.Getenv("GRANTO_AUDIT_WEBHOOK_URL"); v != "" {
+		cfg.Audit.Webhook.URL = v
+	}
 }
 
 func splitComma(s string) []string {
@@ -212,6 +234,22 @@ func validate(cfg *Config) error {
 	case LogoutScopeSession, LogoutScopeDevice, LogoutScopeSubject:
 	default:
 		return fmt.Errorf("session.logout_scope: must be session, device, or subject (got %q)", cfg.Session.LogoutScope)
+	}
+	if cfg.Audit.Enabled {
+		if len(cfg.Audit.Channels) == 0 {
+			return fmt.Errorf("audit.channels: required when audit.enabled is true (stdout and/or webhook)")
+		}
+		for _, ch := range cfg.Audit.Channels {
+			switch strings.ToLower(strings.TrimSpace(ch)) {
+			case "stdout":
+			case "webhook":
+				if strings.TrimSpace(cfg.Audit.Webhook.URL) == "" {
+					return fmt.Errorf("audit.webhook.url is required when audit.channels includes webhook")
+				}
+			default:
+				return fmt.Errorf("audit.channels: unknown %q (want stdout or webhook)", ch)
+			}
+		}
 	}
 	return nil
 }
