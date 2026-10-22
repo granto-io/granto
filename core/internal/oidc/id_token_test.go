@@ -87,6 +87,27 @@ func TestIssueIDTokenWithOpenID(t *testing.T) {
 	}
 }
 
+func TestHintExpired(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1_700_000_000, 0).UTC()
+	if !oidc.HintExpired(nil, now, 0) {
+		t.Fatal("nil claims should be expired")
+	}
+	if !oidc.HintExpired(jwt.MapClaims{"sub": "u"}, now, 0) {
+		t.Fatal("missing exp should be expired")
+	}
+	if oidc.HintExpired(jwt.MapClaims{"exp": float64(now.Add(time.Hour).Unix())}, now, 0) {
+		t.Fatal("future exp should be fresh")
+	}
+	if !oidc.HintExpired(jwt.MapClaims{"exp": float64(now.Add(-time.Hour).Unix())}, now, 0) {
+		t.Fatal("past exp should be expired")
+	}
+	// within skew
+	if oidc.HintExpired(jwt.MapClaims{"exp": float64(now.Add(-30 * time.Second).Unix())}, now, time.Minute) {
+		t.Fatal("within skew should be fresh")
+	}
+}
+
 func TestIssueLogoutToken(t *testing.T) {
 	t.Parallel()
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)

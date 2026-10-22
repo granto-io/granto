@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/granto-io/granto/core/internal/config"
 	"github.com/granto-io/granto/core/internal/domain"
+	"github.com/granto-io/granto/core/internal/oidc"
 )
 
 // LogoutInput is GET/POST /oauth2/logout (OIDC RP-Initiated Logout).
@@ -109,7 +111,8 @@ func (f *Flow) resolveLogoutTargets(ctx context.Context, in LogoutInput) []logou
 			subject = sess.Subject
 		}
 		if subject == "" {
-			subject = f.subjectFromIDTokenHint(in.IDTokenHint)
+			// Single-session logout: expired hint may still identify sid/sub.
+			subject = f.subjectFromIDTokenHint(in.IDTokenHint, false)
 		}
 		return []logoutTarget{{ID: sid, Subject: subject}}
 	}
@@ -121,7 +124,8 @@ func (f *Flow) logoutTargetsBySubject(ctx context.Context, in LogoutInput) []log
 		subject = sess.Subject
 	}
 	if subject == "" {
-		subject = f.subjectFromIDTokenHint(in.IDTokenHint)
+		// Broad logout must not trust a stale leaked id_token_hint alone.
+		subject = f.subjectFromIDTokenHint(in.IDTokenHint, true)
 	}
 	if subject == "" {
 		if sid := f.resolveLogoutSessionID(ctx, in); sid != uuid.Nil {
@@ -149,7 +153,8 @@ func (f *Flow) logoutTargetsByDevice(ctx context.Context, in LogoutInput) []logo
 		subject = sess.Subject
 	}
 	if subject == "" {
-		subject = f.subjectFromIDTokenHint(in.IDTokenHint)
+		// Same freshness rule as subject scope when hint is the only identity.
+		subject = f.subjectFromIDTokenHint(in.IDTokenHint, true)
 	}
 
 	deviceID := ""
@@ -224,7 +229,10 @@ func (f *Flow) resolveLogoutSessionID(ctx context.Context, in LogoutInput) uuid.
 	return sid
 }
 
-func (f *Flow) subjectFromIDTokenHint(hint string) string {
+// subjectFromIDTokenHint returns sub from a verified hint.
+// When requireFresh is true, expired (or missing-exp) hints are ignored —
+// prevents logout_scope=subject|device DoS via a long-leaked id_token_hint.
+func (f *Flow) subjectFromIDTokenHint(hint string, requireFresh bool) string {
 	if hint == "" || f.idTokens == nil {
 		return ""
 	}
@@ -233,6 +241,9 @@ func (f *Flow) subjectFromIDTokenHint(hint string) string {
 		return ""
 	}
 	if iss, _ := claims["iss"].(string); iss != "" && strings.TrimRight(iss, "/") != f.issuer() {
+		return ""
+	}
+	if requireFresh && oidc.HintExpired(claims, time.Now().UTC(), oidc.DefaultHintSkew) {
 		return ""
 	}
 	sub, _ := claims["sub"].(string)
