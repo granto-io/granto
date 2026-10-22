@@ -16,9 +16,33 @@ type Config struct {
 	OAuth2    OAuth2Config    `yaml:"oauth2"`
 	OIDC      OIDCConfig      `yaml:"oidc"`
 	Admin     AdminConfig     `yaml:"admin"`
+	Audit     AuditConfig     `yaml:"audit"`
 	CORS      CORSConfig      `yaml:"cors"`
 	Log       LogConfig       `yaml:"log"`
 	Telemetry TelemetryConfig `yaml:"telemetry"`
+}
+
+// AuditConfig controls stream-only audit delivery (outbox → channels).
+// There is no Admin list API; operators choose sinks via Channels.
+type AuditConfig struct {
+	Enabled  bool               `yaml:"enabled"`
+	Channels []string           `yaml:"channels"` // stdout | webhook
+	Webhook  AuditWebhookConfig `yaml:"webhook"`
+	Outbox   AuditOutboxConfig  `yaml:"outbox"`
+}
+
+// AuditWebhookConfig is used when channels includes "webhook".
+type AuditWebhookConfig struct {
+	URL     string        `yaml:"url"`
+	Timeout time.Duration `yaml:"timeout"`
+}
+
+// AuditOutboxConfig tunes the durable delivery worker.
+type AuditOutboxConfig struct {
+	PollInterval time.Duration `yaml:"poll_interval"`
+	BatchSize    int           `yaml:"batch_size"`
+	ClaimLease   time.Duration `yaml:"claim_lease"`
+	MaxAttempts  int           `yaml:"max_attempts"`
 }
 
 // ServerConfig holds listen addresses and process lifecycle settings.
@@ -91,7 +115,8 @@ const (
 type SessionConfig struct {
 	DefaultTTL time.Duration `yaml:"default_ttl"`
 	MaxTTL     time.Duration `yaml:"max_ttl"`
-	// LogoutScope controls how many LoginSessions /oauth2/logout ends:
+	// LogoutScope controls how many LoginSessions /oauth2/logout ends
+	// (device = same device_id AND subject; never cross-user on shared browsers):
 	// session (default) | device | subject.
 	LogoutScope string `yaml:"logout_scope"`
 }

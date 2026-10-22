@@ -48,15 +48,20 @@ func InitializeApp(configPath ConfigPath) (*app.App, error) {
 		return nil, err
 	}
 	idTokens := oidc.NewIDTokens(config, manager)
-	flow := oauth2.NewFlow(config, clientRepository, loginChallengeRepository, consentChallengeRepository, loginSessionRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository, consentGrantRepository, idTokens)
+	auditRepository := postgres.NewAuditRepository(db, logger)
+	bus, err := provideAuditBus(config, auditRepository, logger)
+	if err != nil {
+		return nil, err
+	}
+	flow := oauth2.NewFlow(config, clientRepository, loginChallengeRepository, consentChallengeRepository, loginSessionRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository, consentGrantRepository, idTokens, bus)
 	discovery := oidc.NewDiscovery(config)
 	handler := public.NewHandler(logger, config, flow, manager, discovery)
 	httpHandler := providePublicRouter(handler, logger)
-	clientServer := admin.NewClientServer(clientRepository)
+	clientServer := admin.NewClientServer(clientRepository, bus)
 	oAuth2Server := admin.NewOAuth2Server(flow)
 	loginSessionServer := admin.NewLoginSessionServer(flow)
 	consentGrantServer := admin.NewConsentGrantServer(flow)
 	server := admin.NewServer(clientServer, oAuth2Server, loginSessionServer, consentGrantServer, config)
-	appApp := app.NewApp(config, logger, httpHandler, db, client, loginSessionRepository, loginChallengeRepository, consentChallengeRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository, server)
+	appApp := app.NewApp(config, logger, httpHandler, db, client, loginSessionRepository, loginChallengeRepository, consentChallengeRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository, bus, server)
 	return appApp, nil
 }

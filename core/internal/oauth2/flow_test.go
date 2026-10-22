@@ -173,10 +173,10 @@ func (m *memSessions) GetByID(_ context.Context, id uuid.UUID) (*domain.LoginSes
 	return &cp, nil
 }
 
-func (m *memSessions) ListBySubject(_ context.Context, _ uuid.UUID, subject string) ([]*domain.LoginSession, error) {
+func (m *memSessions) ListBySubject(_ context.Context, tenantID uuid.UUID, subject string) ([]*domain.LoginSession, error) {
 	var out []*domain.LoginSession
 	for _, s := range m.byID {
-		if s.Subject == subject {
+		if s.TenantID == tenantID && s.Subject == subject {
 			cp := *s
 			out = append(out, &cp)
 		}
@@ -184,10 +184,10 @@ func (m *memSessions) ListBySubject(_ context.Context, _ uuid.UUID, subject stri
 	return out, nil
 }
 
-func (m *memSessions) ListByDeviceID(_ context.Context, _ uuid.UUID, deviceID string) ([]*domain.LoginSession, error) {
+func (m *memSessions) ListByDeviceID(_ context.Context, tenantID uuid.UUID, deviceID, subject string) ([]*domain.LoginSession, error) {
 	var out []*domain.LoginSession
 	for _, s := range m.byID {
-		if s.DeviceID == deviceID {
+		if s.TenantID == tenantID && s.DeviceID == deviceID && s.Subject == subject {
 			cp := *s
 			out = append(out, &cp)
 		}
@@ -297,10 +297,33 @@ func (m *memClients) GetByID(_ context.Context, tenantID, id uuid.UUID) (*domain
 func (m *memClients) List(context.Context, uuid.UUID, repository.ClientFilter) ([]*domain.Client, error) {
 	return nil, nil
 }
-func (m *memClients) Create(context.Context, *domain.Client) error { return nil }
-func (m *memClients) Update(context.Context, *domain.Client) error { return nil }
-func (m *memClients) Delete(context.Context, uuid.UUID, uuid.UUID) error {
+func (m *memClients) Create(_ context.Context, c *domain.Client) error {
+	if m.byID == nil {
+		m.byID = map[string]*domain.Client{}
+	}
+	cp := *c
+	m.byID[c.ClientID] = &cp
 	return nil
+}
+func (m *memClients) Update(_ context.Context, c *domain.Client) error {
+	if m.byID == nil {
+		return domain.ErrClientNotFound
+	}
+	if _, ok := m.byID[c.ClientID]; !ok {
+		return domain.ErrClientNotFound
+	}
+	cp := *c
+	m.byID[c.ClientID] = &cp
+	return nil
+}
+func (m *memClients) Delete(_ context.Context, tenantID, id uuid.UUID) error {
+	for cid, c := range m.byID {
+		if c.ID == id && c.TenantID == tenantID {
+			delete(m.byID, cid)
+			return nil
+		}
+	}
+	return domain.ErrClientNotFound
 }
 
 type memGrants struct {
@@ -323,18 +346,18 @@ func (m *memGrants) Upsert(_ context.Context, g *domain.ConsentGrant) error {
 	m.byKey[grantKey(g.Subject, g.ClientID)] = &cp
 	return nil
 }
-func (m *memGrants) Get(_ context.Context, _ uuid.UUID, subject, clientID string) (*domain.ConsentGrant, error) {
+func (m *memGrants) Get(_ context.Context, tenantID uuid.UUID, subject, clientID string) (*domain.ConsentGrant, error) {
 	g, ok := m.byKey[grantKey(subject, clientID)]
-	if !ok || g.IsExpired() {
+	if !ok || g.IsExpired() || g.TenantID != tenantID {
 		return nil, domain.ErrConsentGrantNotFound
 	}
 	cp := *g
 	return &cp, nil
 }
-func (m *memGrants) ListBySubject(_ context.Context, _ uuid.UUID, subject, clientID string) ([]*domain.ConsentGrant, error) {
+func (m *memGrants) ListBySubject(_ context.Context, tenantID uuid.UUID, subject, clientID string) ([]*domain.ConsentGrant, error) {
 	var out []*domain.ConsentGrant
 	for _, g := range m.byKey {
-		if g.Subject != subject {
+		if g.TenantID != tenantID || g.Subject != subject {
 			continue
 		}
 		if clientID != "" && g.ClientID != clientID {
@@ -352,14 +375,17 @@ func (m *memGrants) ListBySubject(_ context.Context, _ uuid.UUID, subject, clien
 	return out, nil
 }
 
-func (m *memGrants) Delete(_ context.Context, _ uuid.UUID, subject, clientID string) error {
-	delete(m.byKey, grantKey(subject, clientID))
+func (m *memGrants) Delete(_ context.Context, tenantID uuid.UUID, subject, clientID string) error {
+	g, ok := m.byKey[grantKey(subject, clientID)]
+	if ok && g.TenantID == tenantID {
+		delete(m.byKey, grantKey(subject, clientID))
+	}
 	return nil
 }
 
-func (m *memGrants) DeleteBySubject(_ context.Context, _ uuid.UUID, subject string) error {
+func (m *memGrants) DeleteBySubject(_ context.Context, tenantID uuid.UUID, subject string) error {
 	for k, g := range m.byKey {
-		if g.Subject == subject {
+		if g.TenantID == tenantID && g.Subject == subject {
 			delete(m.byKey, k)
 		}
 	}
@@ -417,7 +443,7 @@ func newTestFlow(t *testing.T, strict bool) *testDeps {
 			},
 		}},
 	}
-	d.flow = oauth2.NewFlow(cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{}, d.codes, d.tokens, d.grants, nil)
+	d.flow = oauth2.NewFlow(cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{}, d.codes, d.tokens, d.grants, nil, nil)
 	return d
 }
 
@@ -425,6 +451,10 @@ type memTokens struct {
 	at             map[string]*domain.AccessToken
 	rt             map[string]*domain.RefreshToken
 	sessionClients map[uuid.UUID]map[string]struct{}
+	// revokeSessionErr if set is returned by RevokeRefreshTokensBySession (tests).
+	revokeSessionErr error
+	// getAccessErr if set is returned by GetAccessToken (infra failure tests).
+	getAccessErr error
 }
 
 func (m *memTokens) trackSessionClient(sessionID uuid.UUID, clientID string) {
@@ -452,6 +482,9 @@ func (m *memTokens) CreateAccessToken(_ context.Context, t *domain.AccessToken) 
 	return nil
 }
 func (m *memTokens) GetAccessToken(_ context.Context, _ uuid.UUID, hash string) (*domain.AccessToken, error) {
+	if m.getAccessErr != nil {
+		return nil, m.getAccessErr
+	}
 	t, ok := m.at[hash]
 	if !ok {
 		return nil, domain.ErrAccessTokenNotFound
@@ -513,6 +546,9 @@ func (m *memTokens) RevokeRefreshToken(_ context.Context, _ uuid.UUID, hash stri
 	return nil
 }
 func (m *memTokens) RevokeRefreshTokensBySession(_ context.Context, _ uuid.UUID, sessionID uuid.UUID) error {
+	if m.revokeSessionErr != nil {
+		return m.revokeSessionErr
+	}
 	for h, t := range m.rt {
 		if t.SessionID == sessionID {
 			delete(m.rt, h)
@@ -678,7 +714,7 @@ func TestAuthorizeSSOSkipsToConsent(t *testing.T) {
 	if err := sessions.Create(ctx, sess); err != nil {
 		t.Fatalf("Create session: %v", err)
 	}
-	f := oauth2.NewFlow(cfg, clients, lc, cc, sessions, &memVerifiers{}, &memCodes{}, &memTokens{}, &memGrants{}, nil)
+	f := oauth2.NewFlow(cfg, clients, lc, cc, sessions, &memVerifiers{}, &memCodes{}, &memTokens{}, &memGrants{}, nil, nil)
 
 	res, err := f.Authorize(ctx, oauth2.AuthorizeInput{
 		ClientID:          "app-a",
@@ -816,7 +852,7 @@ func TestRefreshTokenLoadsSessionOnceWithIDToken(t *testing.T) {
 	}
 	d.flow = oauth2.NewFlow(
 		d.cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{},
-		d.codes, d.tokens, d.grants, oidc.NewIDTokens(d.cfg, keyMgr),
+		d.codes, d.tokens, d.grants, oidc.NewIDTokens(d.cfg, keyMgr), nil,
 	)
 
 	sess := &domain.LoginSession{

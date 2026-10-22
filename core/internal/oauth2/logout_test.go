@@ -23,6 +23,24 @@ import (
 	"github.com/granto-io/granto/core/internal/oidc"
 )
 
+func TestLogoutRequiresConfirm(t *testing.T) {
+	t.Parallel()
+	if oauth2.LogoutRequiresConfirm(config.LogoutScopeSession) {
+		t.Fatal("session must not require confirm")
+	}
+	if !oauth2.LogoutRequiresConfirm(config.LogoutScopeDevice) {
+		t.Fatal("device must require confirm")
+	}
+	if !oauth2.LogoutRequiresConfirm(config.LogoutScopeSubject) {
+		t.Fatal("subject must require confirm")
+	}
+	d := newTestFlow(t, false)
+	d.cfg.Session.LogoutScope = config.LogoutScopeSubject
+	if !d.flow.LogoutRequiresConfirm() {
+		t.Fatal("Flow must follow configured logout_scope")
+	}
+}
+
 func TestLogoutClearsSessionAndRedirects(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
@@ -135,11 +153,15 @@ func TestLogoutScopeDeviceDeletesSiblingSessions(t *testing.T) {
 		ID: uuid.New(), TenantID: domain.DefaultTenantID, Subject: "user-1",
 		DeviceID: deviceID, AuthenticatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
 	}
-	sOther := &domain.LoginSession{
+	sOtherDevice := &domain.LoginSession{
 		ID: uuid.New(), TenantID: domain.DefaultTenantID, Subject: "user-1",
 		DeviceID: keepDevice, AuthenticatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
 	}
-	for _, s := range []*domain.LoginSession{s1, s2, sOther} {
+	sOtherUser := &domain.LoginSession{
+		ID: uuid.New(), TenantID: domain.DefaultTenantID, Subject: "user-2",
+		DeviceID: deviceID, AuthenticatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	for _, s := range []*domain.LoginSession{s1, s2, sOtherDevice, sOtherUser} {
 		if err := d.sess.Create(ctx, s); err != nil {
 			t.Fatalf("Create: %v", err)
 		}
@@ -158,8 +180,11 @@ func TestLogoutScopeDeviceDeletesSiblingSessions(t *testing.T) {
 	if _, err := d.sess.GetByID(ctx, s2.ID); !errors.Is(err, domain.ErrLoginSessionNotFound) {
 		t.Fatalf("s2 should be gone, err=%v", err)
 	}
-	if _, err := d.sess.GetByID(ctx, sOther.ID); err != nil {
+	if _, err := d.sess.GetByID(ctx, sOtherDevice.ID); err != nil {
 		t.Fatalf("other device session should remain: %v", err)
+	}
+	if _, err := d.sess.GetByID(ctx, sOtherUser.ID); err != nil {
+		t.Fatalf("other subject on same device must remain: %v", err)
 	}
 }
 
@@ -202,6 +227,92 @@ func TestLogoutScopeSubjectDeletesAllSubjectSessions(t *testing.T) {
 	}
 }
 
+func TestLogoutScopeSubjectIgnoresExpiredIDTokenHint(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+	d.cfg.Session.LogoutScope = "subject"
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(priv),
+	})
+	d.cfg.Token.SigningKeys = config.SigningKeysConfig{
+		PrivateKeyPEM: string(pemBytes),
+		KID:           "test-kid",
+	}
+	keyMgr, err := keys.NewManager(ctx, d.cfg, nil, nil)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	d.flow = oauth2.NewFlow(
+		d.cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{},
+		d.codes, d.tokens, d.grants, oidc.NewIDTokens(d.cfg, keyMgr),
+		nil,
+	)
+
+	s1 := &domain.LoginSession{
+		ID: uuid.New(), TenantID: domain.DefaultTenantID, Subject: "user-1",
+		AuthenticatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	s2 := &domain.LoginSession{
+		ID: uuid.New(), TenantID: domain.DefaultTenantID, Subject: "user-1",
+		AuthenticatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	for _, s := range []*domain.LoginSession{s1, s2} {
+		if err := d.sess.Create(ctx, s); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+	}
+
+	expiredHint, err := keyMgr.SignJWT(jwt.MapClaims{
+		"iss": "https://auth.example",
+		"sub": "user-1",
+		"aud": "app-a",
+		"exp": time.Now().Add(-24 * time.Hour).Unix(),
+		"iat": time.Now().Add(-25 * time.Hour).Unix(),
+	})
+	if err != nil {
+		t.Fatalf("SignJWT: %v", err)
+	}
+
+	_, err = d.flow.Logout(ctx, oauth2.LogoutInput{IDTokenHint: expiredHint})
+	if err != nil {
+		t.Fatalf("Logout: %v", err)
+	}
+	if _, err := d.sess.GetByID(ctx, s1.ID); err != nil {
+		t.Fatalf("s1 must remain after expired hint-only logout: %v", err)
+	}
+	if _, err := d.sess.GetByID(ctx, s2.ID); err != nil {
+		t.Fatalf("s2 must remain after expired hint-only logout: %v", err)
+	}
+
+	freshHint, err := keyMgr.SignJWT(jwt.MapClaims{
+		"iss": "https://auth.example",
+		"sub": "user-1",
+		"aud": "app-a",
+		"exp": time.Now().Add(time.Hour).Unix(),
+		"iat": time.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("SignJWT fresh: %v", err)
+	}
+	_, err = d.flow.Logout(ctx, oauth2.LogoutInput{IDTokenHint: freshHint})
+	if err != nil {
+		t.Fatalf("Logout fresh: %v", err)
+	}
+	if _, err := d.sess.GetByID(ctx, s1.ID); !errors.Is(err, domain.ErrLoginSessionNotFound) {
+		t.Fatal("fresh hint should wipe subject sessions")
+	}
+	if _, err := d.sess.GetByID(ctx, s2.ID); !errors.Is(err, domain.ErrLoginSessionNotFound) {
+		t.Fatal("fresh hint should wipe subject sessions")
+	}
+}
+
 func TestLogoutFrontAndBackChannel(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
@@ -226,6 +337,7 @@ func TestLogoutFrontAndBackChannel(t *testing.T) {
 	d.flow = oauth2.NewFlow(
 		d.cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{},
 		d.codes, d.tokens, d.grants, oidc.NewIDTokens(d.cfg, keyMgr),
+		nil,
 	)
 
 	var (

@@ -7,33 +7,23 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/granto-io/granto/core/internal/domain"
+	"github.com/granto-io/granto/core/internal/tenancy"
 )
-
-type tenantCtxKey struct{}
 
 // WithTenantID attaches the authenticated Admin tenant to ctx.
 func WithTenantID(ctx context.Context, tenantID uuid.UUID) context.Context {
-	return context.WithValue(ctx, tenantCtxKey{}, tenantID)
+	return tenancy.WithID(ctx, tenantID)
 }
 
 // TenantIDFromContext returns the Admin tenant bound by the auth interceptor.
 func TenantIDFromContext(ctx context.Context) (uuid.UUID, bool) {
-	id, ok := ctx.Value(tenantCtxKey{}).(uuid.UUID)
-	if !ok || id == uuid.Nil {
-		return uuid.Nil, false
-	}
-	return id, true
+	return tenancy.FromContext(ctx)
 }
 
 // authTenantID is the tenant of the authenticated Admin caller.
-// MVP: always DefaultTenantID until Admin tokens carry a tenant claim.
+// MVP: interceptor always binds DefaultTenantID until Admin tokens carry a tenant claim.
 func authTenantID(ctx context.Context) uuid.UUID {
-	if id, ok := TenantIDFromContext(ctx); ok {
-		return id
-	}
-	// Defensive fallback (unit tests without interceptor).
-	return domain.DefaultTenantID
+	return tenancy.Resolve(ctx)
 }
 
 // resolveRequestTenant binds Create/List to the authenticated tenant.

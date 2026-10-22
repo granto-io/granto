@@ -1,6 +1,7 @@
 package oauth2
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"github.com/granto-io/granto/core/internal/domain"
 	"github.com/granto-io/granto/core/internal/oidc"
 	"github.com/granto-io/granto/core/internal/repository"
+	"github.com/granto-io/granto/core/internal/tenancy"
 )
 
 const (
@@ -36,10 +38,12 @@ type Flow struct {
 	tokens            repository.TokenRepository
 	consentGrants     repository.ConsentGrantRepository
 	idTokens          *oidc.IDTokens
-	httpClient        *http.Client // back-channel logout; nil → default with timeout
+	audits            repository.AuditRepository // optional; nil = no audit
+	httpClient        *http.Client               // back-channel logout override (tests); nil → SSRF-safe client
 }
 
 // NewFlow constructs an OAuth2 flow orchestrator.
+// audits may be nil (tests / disabled); Log calls become no-ops.
 func NewFlow(
 	cfg *config.Config,
 	clients repository.ClientRepository,
@@ -51,6 +55,7 @@ func NewFlow(
 	tokens repository.TokenRepository,
 	consentGrants repository.ConsentGrantRepository,
 	idTokens *oidc.IDTokens,
+	audits repository.AuditRepository,
 ) *Flow {
 	return &Flow{
 		cfg:               cfg,
@@ -63,11 +68,20 @@ func NewFlow(
 		tokens:            tokens,
 		consentGrants:     consentGrants,
 		idTokens:          idTokens,
+		audits:            audits,
 	}
 }
 
+// tenantID is the MVP single-tenant id for public OAuth paths (no Admin auth ctx).
 func (f *Flow) tenantID() uuid.UUID {
 	return domain.DefaultTenantID
+}
+
+// resolveTenant returns the Admin auth tenant from ctx when present (D-034),
+// otherwise the public MVP tenant. Admin LoginSession / ConsentGrant must use
+// this — not tenantID() — so they follow the same isolation as Client API.
+func (f *Flow) resolveTenant(ctx context.Context) uuid.UUID {
+	return tenancy.Resolve(ctx)
 }
 
 func (f *Flow) issuer() string {

@@ -12,17 +12,19 @@ import (
 	adminv1 "github.com/granto-io/granto/core/gen/admin/v1"
 	"github.com/granto-io/granto/core/internal/domain"
 	"github.com/granto-io/granto/core/internal/repository"
+	"github.com/granto-io/granto/core/internal/reqmeta"
 )
 
 // ClientServer implements adminv1.ClientServiceServer.
 type ClientServer struct {
 	adminv1.UnimplementedClientServiceServer
 	clients repository.ClientRepository
+	audit   repository.AuditRepository
 }
 
 // NewClientServer constructs an Admin ClientService backed by the client repository.
-func NewClientServer(clients repository.ClientRepository) *ClientServer {
-	return &ClientServer{clients: clients}
+func NewClientServer(clients repository.ClientRepository, audit repository.AuditRepository) *ClientServer {
+	return &ClientServer{clients: clients, audit: audit}
 }
 
 func (s *ClientServer) CreateClient(ctx context.Context, req *adminv1.CreateClientRequest) (*adminv1.CreateClientResponse, error) {
@@ -72,6 +74,7 @@ func (s *ClientServer) CreateClient(ctx context.Context, req *adminv1.CreateClie
 	if err := s.clients.Create(ctx, client); err != nil {
 		return nil, domainErrToStatus(err)
 	}
+	s.logClientAudit(ctx, domain.AuditEventClientCreated, client)
 
 	return &adminv1.CreateClientResponse{
 		Client:       clientToProto(client),
@@ -138,6 +141,7 @@ func (s *ClientServer) UpdateClient(ctx context.Context, req *adminv1.UpdateClie
 	if err := s.clients.Update(ctx, client); err != nil {
 		return nil, domainErrToStatus(err)
 	}
+	s.logClientAudit(ctx, domain.AuditEventClientUpdated, client)
 	return &adminv1.UpdateClientResponse{Client: clientToProto(client)}, nil
 }
 
@@ -146,8 +150,38 @@ func (s *ClientServer) DeleteClient(ctx context.Context, req *adminv1.DeleteClie
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "id must be a UUID")
 	}
-	if err := s.clients.Delete(ctx, authTenantID(ctx), id); err != nil {
+	tenantID := authTenantID(ctx)
+	client, err := s.clients.GetByID(ctx, tenantID, id)
+	if err != nil {
 		return nil, domainErrToStatus(err)
 	}
+	if err := s.clients.Delete(ctx, tenantID, id); err != nil {
+		return nil, domainErrToStatus(err)
+	}
+	s.logClientAudit(ctx, domain.AuditEventClientDeleted, client)
 	return &adminv1.DeleteClientResponse{}, nil
+}
+
+func (s *ClientServer) logClientAudit(ctx context.Context, eventType string, client *domain.Client) {
+	if s.audit == nil || client == nil {
+		return
+	}
+	e := &domain.AuditEvent{
+		TenantID:    client.TenantID,
+		EventType:   eventType,
+		ActorType:   domain.AuditActorAdmin,
+		ActorID:     "",
+		SubjectType: domain.AuditSubjectClient,
+		SubjectID:   client.ClientID,
+		ClientID:    client.ClientID,
+		Outcome:     domain.AuditOutcomeSuccess,
+		Metadata:    map[string]any{"source": "admin"},
+	}
+	if ip := reqmeta.IP(ctx); ip != nil {
+		e.IPAddress = ip
+	}
+	if ua := reqmeta.UserAgent(ctx); ua != "" {
+		e.UserAgent = ua
+	}
+	_ = s.audit.Log(ctx, e)
 }

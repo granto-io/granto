@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/granto-io/granto/core/internal/domain"
+	"github.com/granto-io/granto/core/internal/netutil"
 )
 
 // logoutTarget is one LoginSession that logout will end (and notify RPs about).
@@ -26,6 +27,7 @@ type backChannelTask struct {
 }
 
 // SetHTTPClient overrides the HTTP client used for back-channel logout (tests).
+// When set, SSRF URL re-check before POST is skipped (caller is trusted).
 func (f *Flow) SetHTTPClient(c *http.Client) {
 	f.httpClient = c
 }
@@ -34,7 +36,7 @@ func (f *Flow) backChannelHTTPClient() *http.Client {
 	if f.httpClient != nil {
 		return f.httpClient
 	}
-	return &http.Client{Timeout: 10 * time.Second}
+	return netutil.NewSafeHTTPClient(10 * time.Second)
 }
 
 // prepareSessionChannels lists RPs that received tokens for the session and builds
@@ -44,13 +46,14 @@ func (f *Flow) prepareSessionChannels(ctx context.Context, target logoutTarget) 
 	if f.tokens == nil || target.ID == uuid.Nil {
 		return nil, nil
 	}
-	clientIDs, err := f.tokens.ListClientIDsBySession(ctx, f.tenantID(), target.ID)
+	tenantID := f.resolveTenant(ctx)
+	clientIDs, err := f.tokens.ListClientIDsBySession(ctx, tenantID, target.ID)
 	if err != nil || len(clientIDs) == 0 {
 		return nil, nil
 	}
 	issuer := f.issuer()
 	for _, cid := range clientIDs {
-		client, err := f.clients.GetByClientID(ctx, f.tenantID(), cid)
+		client, err := f.clients.GetByClientID(ctx, tenantID, cid)
 		if err != nil {
 			continue
 		}
@@ -60,6 +63,13 @@ func (f *Flow) prepareSessionChannels(ctx context.Context, target logoutTarget) 
 			}
 		}
 		if u := strings.TrimSpace(client.BackChannelLogoutURI); u != "" && f.idTokens != nil {
+			// Skip clearly unsafe URIs even if already stored (legacy / poisoned rows).
+			// Tests inject a custom HTTP client and may use httptest (loopback).
+			if f.httpClient == nil {
+				if err := netutil.ValidateOutboundURL(u); err != nil {
+					continue
+				}
+			}
 			token, err := f.idTokens.IssueLogoutToken(ctx, cid, target.Subject, target.ID)
 			if err != nil {
 				continue

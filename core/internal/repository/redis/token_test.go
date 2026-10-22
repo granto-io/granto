@@ -154,3 +154,68 @@ func TestTokenRepositoryRefreshTokenRotateAndRevokeBySession(t *testing.T) {
 		t.Fatalf("session_clients should be cleared, got %#v", ids)
 	}
 }
+
+func TestSessionClientsTTLNotShortenedByAccessToken(t *testing.T) {
+	t.Parallel()
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	t.Cleanup(mr.Close)
+
+	ctx := context.Background()
+	rc, err := iredis.NewClient(ctx, config.RedisConfig{Addr: mr.Addr(), PoolSize: 2})
+	if err != nil {
+		t.Fatalf("redis client: %v", err)
+	}
+	t.Cleanup(func() { _ = rc.Close() })
+	repo := reporredis.NewTokenRepository(rc)
+	sessionID := uuid.New()
+	key := domain.DefaultTenantID.String() + ":session_clients:" + sessionID.String()
+
+	if err := repo.CreateRefreshToken(ctx, &domain.RefreshToken{
+		TokenHash: domain.HashToken("rt-long"),
+		JTI:       uuid.NewString(),
+		TenantID:  domain.DefaultTenantID,
+		ClientID:  "app-a",
+		Subject:   "user-42",
+		SessionID: sessionID,
+		Scopes:    []string{"openid", "offline"},
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	}); err != nil {
+		t.Fatalf("CreateRefreshToken: %v", err)
+	}
+
+	ttlBefore, err := rc.RDB().TTL(ctx, key).Result()
+	if err != nil {
+		t.Fatalf("TTL before: %v", err)
+	}
+	if ttlBefore < 20*time.Hour {
+		t.Fatalf("TTL before AT = %v, want ~24h", ttlBefore)
+	}
+
+	if err := repo.CreateAccessToken(ctx, &domain.AccessToken{
+		TokenHash: domain.HashToken("at-short"),
+		JTI:       uuid.NewString(),
+		TenantID:  domain.DefaultTenantID,
+		ClientID:  "app-a",
+		Subject:   "user-42",
+		SessionID: sessionID,
+		Scopes:    []string{"openid"},
+		ExpiresAt: time.Now().Add(15 * time.Minute),
+	}); err != nil {
+		t.Fatalf("CreateAccessToken: %v", err)
+	}
+
+	ttlAfter, err := rc.RDB().TTL(ctx, key).Result()
+	if err != nil {
+		t.Fatalf("TTL after: %v", err)
+	}
+	if ttlAfter < 20*time.Hour {
+		t.Fatalf("TTL after short AT = %v, must not shrink below refresh TTL", ttlAfter)
+	}
+	ids, err := repo.ListClientIDsBySession(ctx, domain.DefaultTenantID, sessionID)
+	if err != nil || len(ids) != 1 || ids[0] != "app-a" {
+		t.Fatalf("clients = %#v err=%v", ids, err)
+	}
+}

@@ -25,7 +25,7 @@ func (f *Flow) ListLoginSessions(ctx context.Context, subject string) ([]*domain
 	if subject == "" {
 		return nil, fmt.Errorf("%w: subject is required", ErrInvalidRequest)
 	}
-	return f.loginSessions.ListBySubject(ctx, f.tenantID(), subject)
+	return f.loginSessions.ListBySubject(ctx, f.resolveTenant(ctx), subject)
 }
 
 // DeleteLoginSession removes one session, notifies RPs via back-channel logout,
@@ -40,8 +40,7 @@ func (f *Flow) DeleteLoginSession(ctx context.Context, id string) error {
 		return err
 	}
 	f.notifyBackChannelForSession(ctx, sess)
-	f.deleteOneLoginSession(ctx, sid)
-	return nil
+	return f.deleteOneLoginSession(ctx, sid)
 }
 
 // DeleteLoginSessionsBySubject removes all sessions for subject and revokes
@@ -51,13 +50,15 @@ func (f *Flow) DeleteLoginSessionsBySubject(ctx context.Context, subject string)
 	if subject == "" {
 		return fmt.Errorf("%w: subject is required", ErrInvalidRequest)
 	}
-	sessions, err := f.loginSessions.ListBySubject(ctx, f.tenantID(), subject)
+	sessions, err := f.loginSessions.ListBySubject(ctx, f.resolveTenant(ctx), subject)
 	if err != nil {
 		return err
 	}
 	for _, s := range sessions {
 		f.notifyBackChannelForSession(ctx, s)
-		f.deleteOneLoginSession(ctx, s.ID)
+		if err := f.deleteOneLoginSession(ctx, s.ID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -84,7 +85,7 @@ func (f *Flow) requireLoginSession(ctx context.Context, id uuid.UUID) (*domain.L
 	if err != nil {
 		return nil, err
 	}
-	if sess.TenantID != f.tenantID() {
+	if sess.TenantID != f.resolveTenant(ctx) {
 		return nil, domain.ErrLoginSessionNotFound
 	}
 	return sess, nil

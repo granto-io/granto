@@ -33,6 +33,7 @@ func clientSecretDummyHash() []byte {
 
 func (f *Flow) authenticateClient(ctx context.Context, clientID, clientSecret string) (*domain.Client, error) {
 	if clientID == "" {
+		f.auditTokenFailure(ctx, "", "invalid_client", map[string]any{"reason": "missing_client_id"})
 		return nil, ErrInvalidClient
 	}
 	client, err := f.clients.GetByClientID(ctx, f.tenantID(), clientID)
@@ -40,6 +41,7 @@ func (f *Flow) authenticateClient(ctx context.Context, clientID, clientSecret st
 		if errors.Is(err, domain.ErrClientNotFound) {
 			// Same work as a failed confidential check (timing side-channel).
 			_ = verifyClientSecret(clientSecretDummyHash(), clientSecret)
+			f.auditTokenFailure(ctx, clientID, "invalid_client", map[string]any{"reason": "unknown_client"})
 			return nil, ErrInvalidClient
 		}
 		return nil, err
@@ -53,6 +55,7 @@ func (f *Flow) authenticateClient(ctx context.Context, clientID, clientSecret st
 		hash = clientSecretDummyHash()
 	}
 	if err := verifyClientSecret(hash, clientSecret); err != nil {
+		f.auditTokenFailure(ctx, clientID, "invalid_client", map[string]any{"reason": "bad_client_secret"})
 		return nil, ErrInvalidClientSecret
 	}
 	return client, nil

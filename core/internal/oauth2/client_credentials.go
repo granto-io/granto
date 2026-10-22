@@ -22,9 +22,11 @@ func (f *Flow) ClientCredentials(ctx context.Context, in ClientCredentialsInput)
 		return nil, err
 	}
 	if client.IsPublic() || client.TokenEndpointAuthMethod == domain.TokenEndpointAuthNone {
+		f.auditTokenFailure(ctx, in.ClientID, "unauthorized_client", map[string]any{"reason": "public_or_none_auth"})
 		return nil, ErrUnauthorizedClient
 	}
 	if !client.HasGrantType(domain.GrantTypeClientCredentials) {
+		f.auditTokenFailure(ctx, in.ClientID, "unauthorized_client", map[string]any{"reason": "grant_type_not_allowed"})
 		return nil, ErrUnauthorizedClient
 	}
 
@@ -34,6 +36,7 @@ func (f *Flow) ClientCredentials(ctx context.Context, in ClientCredentialsInput)
 	}
 	for _, scope := range scopes {
 		if !client.HasScope(scope) {
+			f.auditTokenFailure(ctx, in.ClientID, "invalid_scope", map[string]any{"reason": "scope_not_allowed", "scope": scope})
 			return nil, fmt.Errorf("%w: %s", ErrInvalidScope, scope)
 		}
 	}

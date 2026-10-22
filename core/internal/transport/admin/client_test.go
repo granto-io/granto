@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	adminv1 "github.com/granto-io/granto/core/gen/admin/v1"
 	"github.com/granto-io/granto/core/internal/domain"
 	"github.com/granto-io/granto/core/internal/repository"
+	"github.com/granto-io/granto/core/internal/reqmeta"
 )
 
 type mockClients struct {
@@ -32,6 +34,9 @@ func (m *mockClients) GetByClientID(context.Context, uuid.UUID, string) (*domain
 }
 func (m *mockClients) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.Client, error) {
 	m.lastTenant = tenantID
+	if m.getByID == nil {
+		return nil, domain.ErrClientNotFound
+	}
 	return m.getByID(ctx, tenantID, id)
 }
 func (m *mockClients) List(ctx context.Context, tenantID uuid.UUID, filter repository.ClientFilter) ([]*domain.Client, error) {
@@ -62,13 +67,13 @@ func adminCtx() context.Context {
 }
 
 func TestCreateClient_RequiresName(t *testing.T) {
-	s := NewClientServer(&mockClients{})
+	s := NewClientServer(&mockClients{}, nil)
 	_, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{})
 	assertStatusCode(t, err, codes.InvalidArgument)
 }
 
 func TestCreateClient_InvalidType(t *testing.T) {
-	s := NewClientServer(&mockClients{})
+	s := NewClientServer(&mockClients{}, nil)
 	_, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{
 		Name:       "n",
 		ClientType: "nope",
@@ -78,7 +83,7 @@ func TestCreateClient_InvalidType(t *testing.T) {
 
 func TestCreateClient_PublicNoSecret(t *testing.T) {
 	repo := &mockClients{}
-	s := NewClientServer(repo)
+	s := NewClientServer(repo, nil)
 	resp, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{
 		Name:       "spa",
 		ClientType: "public",
@@ -102,7 +107,7 @@ func TestCreateClient_PublicNoSecret(t *testing.T) {
 
 func TestCreateClient_AutoSecret(t *testing.T) {
 	repo := &mockClients{}
-	s := NewClientServer(repo)
+	s := NewClientServer(repo, nil)
 	resp, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{Name: "api"})
 	if err != nil {
 		t.Fatalf("CreateClient unexpected error: %v", err)
@@ -123,7 +128,7 @@ func TestCreateClient_AutoSecret(t *testing.T) {
 }
 
 func TestCreateClient_ForeignTenantDenied(t *testing.T) {
-	s := NewClientServer(&mockClients{})
+	s := NewClientServer(&mockClients{}, nil)
 	other := uuid.New()
 	_, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{
 		Name:     "x",
@@ -134,7 +139,7 @@ func TestCreateClient_ForeignTenantDenied(t *testing.T) {
 
 func TestCreateClient_ProvidedSecret(t *testing.T) {
 	repo := &mockClients{}
-	s := NewClientServer(repo)
+	s := NewClientServer(repo, nil)
 	const (
 		wantID     = "fixed-id"
 		wantSecret = "provided-secret"
@@ -162,7 +167,7 @@ func TestCreateClient_RepoError(t *testing.T) {
 	repo := &mockClients{createFn: func(context.Context, *domain.Client) error {
 		return domain.ErrClientNotFound
 	}}
-	s := NewClientServer(repo)
+	s := NewClientServer(repo, nil)
 	_, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{Name: "n"})
 	assertStatusCode(t, err, codes.NotFound)
 }
@@ -185,7 +190,7 @@ func TestGetClient(t *testing.T) {
 			UpdatedAt: time.Now().UTC(),
 		}, nil
 	}}
-	s := NewClientServer(repo)
+	s := NewClientServer(repo, nil)
 
 	t.Run("invalid uuid is invalid argument", func(t *testing.T) {
 		_, err := s.GetClient(adminCtx(), &adminv1.GetClientRequest{Id: "bad"})
@@ -215,7 +220,7 @@ func TestListClients_DefaultLimit(t *testing.T) {
 	repo := &mockClients{listFn: func(context.Context, uuid.UUID, repository.ClientFilter) ([]*domain.Client, error) {
 		return nil, nil
 	}}
-	s := NewClientServer(repo)
+	s := NewClientServer(repo, nil)
 	_, err := s.ListClients(adminCtx(), &adminv1.ListClientsRequest{
 		Search: "app",
 		Offset: 10,
@@ -240,7 +245,7 @@ func TestListClients_DefaultLimit(t *testing.T) {
 func TestListClients_ForeignTenantDenied(t *testing.T) {
 	s := NewClientServer(&mockClients{listFn: func(context.Context, uuid.UUID, repository.ClientFilter) ([]*domain.Client, error) {
 		return nil, nil
-	}})
+	}}, nil)
 	_, err := s.ListClients(adminCtx(), &adminv1.ListClientsRequest{
 		TenantId: uuid.New().String(),
 	})
@@ -269,7 +274,7 @@ func TestUpdateClient(t *testing.T) {
 			return nil
 		},
 	}
-	s := NewClientServer(repo)
+	s := NewClientServer(repo, nil)
 
 	t.Run("invalid uuid is invalid argument", func(t *testing.T) {
 		_, err := s.UpdateClient(adminCtx(), &adminv1.UpdateClientRequest{Id: "x"})
@@ -292,16 +297,27 @@ func TestUpdateClient(t *testing.T) {
 
 func TestDeleteClient(t *testing.T) {
 	id := uuid.New()
-	repo := &mockClients{deleteFn: func(_ context.Context, tenantID, got uuid.UUID) error {
-		if tenantID != domain.DefaultTenantID {
-			t.Fatalf("Delete tenant=%v, want DefaultTenantID", tenantID)
-		}
-		if got != id {
-			t.Fatalf("Delete called with id=%v, want %v", got, id)
-		}
-		return nil
-	}}
-	s := NewClientServer(repo)
+	repo := &mockClients{
+		getByID: func(_ context.Context, tenantID, got uuid.UUID) (*domain.Client, error) {
+			if tenantID != domain.DefaultTenantID {
+				t.Fatalf("GetByID tenant=%v, want DefaultTenantID", tenantID)
+			}
+			if got != id {
+				t.Fatalf("GetByID id=%v, want %v", got, id)
+			}
+			return &domain.Client{ID: id, TenantID: tenantID, ClientID: "c-del"}, nil
+		},
+		deleteFn: func(_ context.Context, tenantID, got uuid.UUID) error {
+			if tenantID != domain.DefaultTenantID {
+				t.Fatalf("Delete tenant=%v, want DefaultTenantID", tenantID)
+			}
+			if got != id {
+				t.Fatalf("Delete called with id=%v, want %v", got, id)
+			}
+			return nil
+		},
+	}
+	s := NewClientServer(repo, nil)
 
 	t.Run("invalid uuid is invalid argument", func(t *testing.T) {
 		_, err := s.DeleteClient(adminCtx(), &adminv1.DeleteClientRequest{Id: "bad"})
@@ -316,10 +332,50 @@ func TestDeleteClient(t *testing.T) {
 	})
 
 	t.Run("missing client is not found", func(t *testing.T) {
-		repo.deleteFn = func(context.Context, uuid.UUID, uuid.UUID) error { return domain.ErrClientNotFound }
+		repo.getByID = func(context.Context, uuid.UUID, uuid.UUID) (*domain.Client, error) {
+			return nil, domain.ErrClientNotFound
+		}
 		_, err := s.DeleteClient(adminCtx(), &adminv1.DeleteClientRequest{Id: id.String()})
 		assertStatusCode(t, err, codes.NotFound)
 	})
 }
 
+func TestCreateClient_AuditIncludesReqmeta(t *testing.T) {
+	t.Parallel()
+	repo := &mockClients{}
+	aud := &captureAudit{}
+	s := NewClientServer(repo, aud)
+	ctx := reqmeta.WithIP(adminCtx(), net.ParseIP("203.0.113.50"))
+	ctx = reqmeta.WithUserAgent(ctx, "postman/10")
+
+	if _, err := s.CreateClient(ctx, &adminv1.CreateClientRequest{Name: "audited"}); err != nil {
+		t.Fatalf("CreateClient: %v", err)
+	}
+	if len(aud.events) != 1 {
+		t.Fatalf("audit events=%d, want 1", len(aud.events))
+	}
+	e := aud.events[0]
+	if e.EventType != domain.AuditEventClientCreated {
+		t.Fatalf("EventType=%q, want %q", e.EventType, domain.AuditEventClientCreated)
+	}
+	if e.IPAddress == nil || !e.IPAddress.Equal(net.ParseIP("203.0.113.50")) {
+		t.Fatalf("IPAddress=%v, want 203.0.113.50", e.IPAddress)
+	}
+	if e.UserAgent != "postman/10" {
+		t.Fatalf("UserAgent=%q, want postman/10", e.UserAgent)
+	}
+}
+
+type captureAudit struct {
+	events []*domain.AuditEvent
+}
+
+func (c *captureAudit) Log(_ context.Context, e *domain.AuditEvent) error {
+	cp := *e
+	c.events = append(c.events, &cp)
+	return nil
+}
+func (c *captureAudit) Stop() {}
+
 var _ repository.ClientRepository = (*mockClients)(nil)
+var _ repository.AuditRepository = (*captureAudit)(nil)

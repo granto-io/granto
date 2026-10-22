@@ -90,6 +90,7 @@ Authentication session TTL bounds (consent / login session store).
 |-----|---------|---------|
 | `default_ttl` | `24h` | Default session lifetime |
 | `max_ttl` | `720h` | Hard ceiling |
+| `logout_scope` | `session` | How far `/oauth2/logout` reaches: `session` \| `device` \| `subject`. For `device`/`subject`, GET → confirm, POST completes. Also: `Sec-Fetch-Site=cross-site` without `id_token_hint` forces confirm even for `session` (warn-logged). |
 
 ### `oauth2`
 
@@ -127,6 +128,25 @@ Admin API access (MVP: static bearer; production may move to mTLS / OAuth).
 | `accept_strict` | `false` | When `true`, AcceptLogin/AcceptConsent require `accept_token` from Get*. Default = Hydra-compatible (challenge id + Admin auth enough) |
 
 Env: `GRANTO_ADMIN_TOKEN`, `GRANTO_ADMIN_ACCEPT_STRICT`. Prefer env for `token` in production. IP allow-listing is out of MVP (network / reverse-proxy concern for now).
+
+### `audit`
+
+Stream-only audit (D-039): events go to a durable Postgres **outbox**, then to configured **channels**. There is **no** Admin list/query API — storage/SIEM is the operator’s choice (pipe `stdout` / `webhook` into ELK, ClickHouse, Vector, …).
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `enabled` | `true` | When `false`, emit is a no-op |
+| `channels` | `["stdout"]` | Delivery sinks: `stdout` (JSON lines), `webhook` (HTTP POST JSON) |
+| `webhook.url` | empty | Required if `webhook` is in `channels` |
+| `webhook.timeout` | `5s` | HTTP client timeout |
+| `outbox.poll_interval` | `1s` | Dispatcher tick |
+| `outbox.batch_size` | `50` | Rows claimed per tick |
+| `outbox.claim_lease` | `30s` | Lease while delivering (`FOR UPDATE SKIP LOCKED`) |
+| `outbox.max_attempts` | `10` | After this, row is dropped (error logged) |
+
+Env: `GRANTO_AUDIT_ENABLED`, `GRANTO_AUDIT_CHANNELS` (comma-separated), `GRANTO_AUDIT_WEBHOOK_URL`.
+
+At-least-once: a failed channel nacks the outbox row (retries may re-deliver to channels that already succeeded).
 
 ### `cors`
 

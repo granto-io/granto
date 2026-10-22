@@ -31,6 +31,7 @@ type App struct {
 	FlowVerifiers      repository.FlowVerifierRepository
 	AuthorizationCodes repository.AuthorizationCodeRepository
 	Tokens             repository.TokenRepository
+	Audit              repository.AuditRepository
 	Admin              *admin.Server
 
 	publicHTTP *http.Server
@@ -49,6 +50,7 @@ func NewApp(
 	flowVerifiers repository.FlowVerifierRepository,
 	authorizationCodes repository.AuthorizationCodeRepository,
 	tokens repository.TokenRepository,
+	audit repository.AuditRepository,
 	adminSrv *admin.Server,
 ) *App {
 	return &App{
@@ -63,6 +65,7 @@ func NewApp(
 		FlowVerifiers:      flowVerifiers,
 		AuthorizationCodes: authorizationCodes,
 		Tokens:             tokens,
+		Audit:              audit,
 		Admin:              adminSrv,
 	}
 }
@@ -134,6 +137,10 @@ func (a *App) Run(ctx context.Context) error {
 		}
 		a.Admin.StopGRPC(shutdownCtx)
 
+		if a.Audit != nil {
+			a.Audit.Stop()
+			a.Logger.Info("audit writer stopped")
+		}
 		if a.DB != nil {
 			a.DB.Close()
 			a.Logger.Info("postgres pool closed")

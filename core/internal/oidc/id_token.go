@@ -2,6 +2,7 @@ package oidc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -88,7 +89,9 @@ func (s *IDTokens) Issue(_ context.Context, in IssueInput) (string, error) {
 	return signed, nil
 }
 
-// ParseHint verifies an id_token_hint signature (exp may be ignored by the key parser).
+// ParseHint verifies an id_token_hint signature (exp is not enforced here —
+// OIDC RP-Initiated Logout allows expired hints as identity hints; callers
+// that perform broad logout must check HintExpired themselves).
 func (s *IDTokens) ParseHint(raw string) (jwt.MapClaims, error) {
 	if s == nil || s.keys == nil {
 		return nil, fmt.Errorf("id token verifier not configured")
@@ -100,8 +103,53 @@ func (s *IDTokens) ParseHint(raw string) (jwt.MapClaims, error) {
 	return s.keys.ParseJWT(raw)
 }
 
+// DefaultHintSkew is clock skew allowed when requiring a fresh id_token_hint.
+const DefaultHintSkew = time.Minute
+
+// HintExpired reports whether claims are past exp (+skew). Missing/unparseable
+// exp is treated as expired (fail closed for freshness checks).
+func HintExpired(claims jwt.MapClaims, now time.Time, skew time.Duration) bool {
+	if claims == nil {
+		return true
+	}
+	if skew < 0 {
+		skew = 0
+	}
+	exp, ok := claimUnix(claims["exp"])
+	if !ok {
+		return true
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	return now.After(time.Unix(exp, 0).UTC().Add(skew))
+}
+
+func claimUnix(v any) (int64, bool) {
+	switch t := v.(type) {
+	case float64:
+		return int64(t), true
+	case float32:
+		return int64(t), true
+	case int64:
+		return t, true
+	case int:
+		return int64(t), true
+	case json.Number:
+		n, err := t.Int64()
+		return n, err == nil
+	default:
+		return 0, false
+	}
+}
+
+// LogoutTokenTTL is how long a back-channel logout_token remains valid.
+// Short-lived: one POST delivery window (OIDC Back-Channel Logout requires exp).
+const LogoutTokenTTL = 2 * time.Minute
+
 // IssueLogoutToken mints an OIDC Back-Channel Logout Token (JWT) for the RP.
 // Spec: https://openid.net/specs/openid-connect-backchannel-1_0.html
+// Required claims include iss, aud, iat, exp, jti, events; MUST NOT contain nonce.
 func (s *IDTokens) IssueLogoutToken(_ context.Context, clientID, subject string, sessionID uuid.UUID) (string, error) {
 	if s == nil || s.keys == nil {
 		return "", fmt.Errorf("id token signer not configured")
@@ -120,6 +168,7 @@ func (s *IDTokens) IssueLogoutToken(_ context.Context, clientID, subject string,
 		"iss": strings.TrimRight(s.cfg.Token.Issuer, "/"),
 		"aud": clientID,
 		"iat": now.Unix(),
+		"exp": now.Add(LogoutTokenTTL).Unix(),
 		"jti": uuid.NewString(),
 		"events": map[string]any{
 			"http://schemas.openid.net/event/backchannel-logout": map[string]any{},

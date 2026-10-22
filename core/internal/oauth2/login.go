@@ -95,6 +95,19 @@ func (f *Flow) AcceptLogin(ctx context.Context, in AcceptLoginInput) (redirectTo
 	if err := f.loginSessions.Create(ctx, session); err != nil {
 		return "", fmt.Errorf("create login session: %w", err)
 	}
+	f.auditSuccess(ctx, domain.AuditEventLoginAccepted, domain.AuditActorAdmin, in.Subject, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectUser
+		e.SubjectID = in.Subject
+		e.ClientID = ch.ClientID
+		e.SessionID = session.ID.String()
+		e.Metadata = map[string]any{"challenge_id": ch.ID.String()}
+	})
+	f.auditSuccess(ctx, domain.AuditEventSessionCreated, domain.AuditActorAdmin, in.Subject, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectSession
+		e.SubjectID = session.ID.String()
+		e.ClientID = ch.ClientID
+		e.SessionID = session.ID.String()
+	})
 
 	client, err := f.clients.GetByClientID(ctx, f.tenantID(), ch.ClientID)
 	if err != nil {
@@ -150,6 +163,13 @@ func (f *Flow) AcceptLogin(ctx context.Context, in AcceptLoginInput) (redirectTo
 	if err := f.consentChallenges.Create(ctx, consent); err != nil {
 		return "", fmt.Errorf("create consent challenge: %w", err)
 	}
+	f.auditSuccess(ctx, domain.AuditEventConsentChallengeCreated, domain.AuditActorSystem, in.Subject, func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectUser
+		e.SubjectID = in.Subject
+		e.ClientID = ch.ClientID
+		e.SessionID = session.ID.String()
+		e.Metadata = map[string]any{"challenge_id": consent.ID.String()}
+	})
 
 	consentUI, err := buildConsentUIURL(f.consentURL(), consent.ID.String())
 	if err != nil {
@@ -193,6 +213,13 @@ func (f *Flow) RejectLogin(ctx context.Context, in RejectInput) (redirectTo stri
 	if err := f.loginChallenges.Delete(ctx, f.tenantID(), id); err != nil {
 		return "", mapChallengeErr(err)
 	}
+	f.auditFailure(ctx, domain.AuditEventLoginRejected, domain.AuditActorAdmin, "", in.Error, func(e *domain.AuditEvent) {
+		e.ClientID = ch.ClientID
+		e.Metadata = map[string]any{
+			"challenge_id":      ch.ID.String(),
+			"error_description": in.ErrorDescription,
+		}
+	})
 
 	clientURL, err := buildClientErrorURL(ch.RedirectURI, ch.State, in.Error, in.ErrorDescription, in.ErrorHint)
 	if err != nil {

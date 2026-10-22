@@ -3,9 +3,11 @@ package di
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/wire"
 
+	auditpkg "github.com/granto-io/granto/core/internal/audit"
 	"github.com/granto-io/granto/core/internal/config"
 	"github.com/granto-io/granto/core/internal/postgres"
 	"github.com/granto-io/granto/core/internal/repository"
@@ -22,6 +24,10 @@ var PostgresSet = wire.NewSet(
 	wire.Bind(new(repository.LoginSessionRepository), new(*repopg.LoginSessionRepository)),
 	repopg.NewConsentGrantRepository,
 	wire.Bind(new(repository.ConsentGrantRepository), new(*repopg.ConsentGrantRepository)),
+	repopg.NewAuditRepository,
+	wire.Bind(new(repository.AuditOutbox), new(*repopg.AuditRepository)),
+	provideAuditBus,
+	wire.Bind(new(repository.AuditRepository), new(*auditpkg.Bus)),
 )
 
 func provideDB(cfg *config.Config) (*postgres.DB, error) {
@@ -36,4 +42,8 @@ func provideDB(cfg *config.Config) (*postgres.DB, error) {
 		return nil, fmt.Errorf("postgres pool: %w", err)
 	}
 	return postgres.New(pool), nil
+}
+
+func provideAuditBus(cfg *config.Config, outbox repository.AuditOutbox, logger *slog.Logger) (*auditpkg.Bus, error) {
+	return auditpkg.NewBus(cfg, outbox, logger)
 }

@@ -51,21 +51,25 @@ type AuthorizeResult struct {
 // when SSO session is already valid), and returns a browser redirect.
 func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResult, error) {
 	if strings.TrimSpace(in.ClientID) == "" || strings.TrimSpace(in.RedirectURI) == "" {
+		f.auditAuthorizeFailure(ctx, strings.TrimSpace(in.ClientID), ErrInvalidRequest)
 		return nil, fmt.Errorf("%w: client_id and redirect_uri are required", ErrInvalidRequest)
 	}
 
 	client, err := f.clients.GetByClientID(ctx, f.tenantID(), in.ClientID)
 	if err != nil {
 		if errors.Is(err, domain.ErrClientNotFound) {
+			f.auditAuthorizeFailure(ctx, in.ClientID, ErrInvalidClient)
 			return nil, ErrInvalidClient
 		}
 		return nil, err
 	}
 	// Validate redirect_uri before any client-redirectable error (RFC 6749 §4.1.2.1).
 	if !client.HasRedirectURI(in.RedirectURI) {
+		f.auditAuthorizeFailure(ctx, in.ClientID, ErrInvalidRedirectURI)
 		return nil, ErrInvalidRedirectURI
 	}
 	toClient := func(err error) error {
+		f.auditAuthorizeFailure(ctx, in.ClientID, err)
 		return clientRedirect(err, in.RedirectURI, in.State)
 	}
 
@@ -191,6 +195,13 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 		if err := f.consentChallenges.Create(ctx, consent); err != nil {
 			return nil, fmt.Errorf("create consent challenge: %w", err)
 		}
+		f.auditSuccess(ctx, domain.AuditEventConsentChallengeCreated, domain.AuditActorSystem, subject, func(e *domain.AuditEvent) {
+			e.SubjectType = domain.AuditSubjectUser
+			e.SubjectID = subject
+			e.ClientID = client.ClientID
+			e.SessionID = sessionID.String()
+			e.Metadata = map[string]any{"challenge_id": consent.ID.String(), "source": "authorize"}
+		})
 		redirect, err := buildConsentUIURL(f.consentURL(), consent.ID.String())
 		if err != nil {
 			return nil, err
@@ -223,6 +234,10 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 	if err := f.loginChallenges.Create(ctx, ch); err != nil {
 		return nil, fmt.Errorf("create login challenge: %w", err)
 	}
+	f.auditSuccess(ctx, domain.AuditEventLoginChallengeCreated, domain.AuditActorSystem, "", func(e *domain.AuditEvent) {
+		e.ClientID = client.ClientID
+		e.Metadata = map[string]any{"challenge_id": ch.ID.String()}
+	})
 
 	redirect, err := buildLoginUIURL(f.cfg.OAuth2.LoginURL, ch.ID.String())
 	if err != nil {

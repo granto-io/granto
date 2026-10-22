@@ -2,14 +2,17 @@ package oauth2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/granto-io/granto/core/internal/config"
 	"github.com/granto-io/granto/core/internal/domain"
+	"github.com/granto-io/granto/core/internal/oidc"
 )
 
 // LogoutInput is GET/POST /oauth2/logout (OIDC RP-Initiated Logout).
@@ -22,6 +25,31 @@ type LogoutInput struct {
 	ClientID           string
 	PostLogoutRedirect string
 	State              string
+}
+
+// LogoutRequiresConfirm reports whether GET /oauth2/logout must show a browser
+// confirmation form before ending sessions. True for device|subject (CSRF would
+// cascade revoke); false for session (classic low-risk logout CSRF accepted).
+func LogoutRequiresConfirm(scope string) bool {
+	switch strings.TrimSpace(strings.ToLower(scope)) {
+	case config.LogoutScopeDevice, config.LogoutScopeSubject:
+		return true
+	default:
+		return false
+	}
+}
+
+// LogoutRequiresConfirm reports whether this Flow's configured logout_scope
+// needs a confirm step on GET (see LogoutRequiresConfirm).
+func (f *Flow) LogoutRequiresConfirm() bool {
+	if f == nil || f.cfg == nil {
+		return false
+	}
+	scope := f.cfg.Session.LogoutScope
+	if scope == "" {
+		scope = config.LogoutScopeSession
+	}
+	return LogoutRequiresConfirm(scope)
 }
 
 // LogoutResult tells the public handler how to finish the browser logout.
@@ -51,7 +79,30 @@ func (f *Flow) Logout(ctx context.Context, in LogoutInput) (*LogoutResult, error
 	f.dispatchBackChannelLogout(tasks)
 
 	for _, t := range targets {
-		f.deleteOneLoginSession(ctx, t.ID)
+		// Best-effort: if revoke fails, session is kept (no orphan refresh tokens).
+		_ = f.deleteOneLoginSession(ctx, t.ID)
+	}
+	if len(targets) > 0 {
+		scope := f.cfg.Session.LogoutScope
+		if scope == "" {
+			scope = config.LogoutScopeSession
+		}
+		ids := make([]string, 0, len(targets))
+		subject := ""
+		for _, t := range targets {
+			ids = append(ids, t.ID.String())
+			if subject == "" {
+				subject = t.Subject
+			}
+		}
+		f.auditSuccess(ctx, domain.AuditEventLogout, domain.AuditActorUser, subject, func(e *domain.AuditEvent) {
+			e.SubjectType = domain.AuditSubjectUser
+			e.SubjectID = subject
+			e.Metadata = map[string]any{
+				"logout_scope": scope,
+				"session_ids":  ids,
+			}
+		})
 	}
 
 	out := &LogoutResult{
@@ -109,7 +160,8 @@ func (f *Flow) resolveLogoutTargets(ctx context.Context, in LogoutInput) []logou
 			subject = sess.Subject
 		}
 		if subject == "" {
-			subject = f.subjectFromIDTokenHint(in.IDTokenHint)
+			// Single-session logout: expired hint may still identify sid/sub.
+			subject = f.subjectFromIDTokenHint(in.IDTokenHint, false)
 		}
 		return []logoutTarget{{ID: sid, Subject: subject}}
 	}
@@ -121,7 +173,8 @@ func (f *Flow) logoutTargetsBySubject(ctx context.Context, in LogoutInput) []log
 		subject = sess.Subject
 	}
 	if subject == "" {
-		subject = f.subjectFromIDTokenHint(in.IDTokenHint)
+		// Broad logout must not trust a stale leaked id_token_hint alone.
+		subject = f.subjectFromIDTokenHint(in.IDTokenHint, true)
 	}
 	if subject == "" {
 		if sid := f.resolveLogoutSessionID(ctx, in); sid != uuid.Nil {
@@ -141,24 +194,35 @@ func (f *Flow) logoutTargetsBySubject(ctx context.Context, in LogoutInput) []log
 }
 
 func (f *Flow) logoutTargetsByDevice(ctx context.Context, in LogoutInput) []logoutTarget {
+	// Device scope = this subject's sessions on this browser, never other users
+	// sharing the same granto_did (kiosk / shared machine).
+	subject := ""
+	sess := f.loadLogoutSession(ctx, in)
+	if sess != nil {
+		subject = sess.Subject
+	}
+	if subject == "" {
+		// Same freshness rule as subject scope when hint is the only identity.
+		subject = f.subjectFromIDTokenHint(in.IDTokenHint, true)
+	}
+
 	deviceID := ""
-	if sess := f.loadLogoutSession(ctx, in); sess != nil && strings.TrimSpace(sess.DeviceID) != "" {
+	if sess != nil && strings.TrimSpace(sess.DeviceID) != "" {
 		deviceID = strings.TrimSpace(sess.DeviceID)
 	}
 	if deviceID == "" {
 		deviceID = normalizeDeviceID(in.DeviceIDFromCookie)
 	}
-	if deviceID == "" {
+
+	if subject == "" || deviceID == "" {
+		// Without both anchors, fall back to the single resolved session only.
 		if sid := f.resolveLogoutSessionID(ctx, in); sid != uuid.Nil {
-			subject := ""
-			if sess := f.loadLogoutSession(ctx, in); sess != nil {
-				subject = sess.Subject
-			}
 			return []logoutTarget{{ID: sid, Subject: subject}}
 		}
 		return nil
 	}
-	sessions, err := f.loginSessions.ListByDeviceID(ctx, f.tenantID(), deviceID)
+
+	sessions, err := f.loginSessions.ListByDeviceID(ctx, f.tenantID(), deviceID, subject)
 	if err != nil {
 		return nil
 	}
@@ -169,11 +233,27 @@ func (f *Flow) logoutTargetsByDevice(ctx context.Context, in LogoutInput) []logo
 	return out
 }
 
-func (f *Flow) deleteOneLoginSession(ctx context.Context, sessionID uuid.UUID) {
-	_ = f.loginSessions.Delete(ctx, sessionID)
+// deleteOneLoginSession revokes refresh tokens for the session, then deletes
+// the LoginSession. Order matters: never drop the session while RT may still
+// be valid. If revoke fails, the session is left intact.
+func (f *Flow) deleteOneLoginSession(ctx context.Context, sessionID uuid.UUID) error {
 	if f.tokens != nil {
-		_ = f.tokens.RevokeRefreshTokensBySession(ctx, f.tenantID(), sessionID)
+		if err := f.tokens.RevokeRefreshTokensBySession(ctx, f.resolveTenant(ctx), sessionID); err != nil {
+			return fmt.Errorf("revoke refresh tokens: %w", err)
+		}
 	}
+	if err := f.loginSessions.Delete(ctx, sessionID); err != nil {
+		if errors.Is(err, domain.ErrLoginSessionNotFound) {
+			return nil
+		}
+		return err
+	}
+	f.auditSuccess(ctx, domain.AuditEventSessionDeleted, domain.AuditActorSystem, "", func(e *domain.AuditEvent) {
+		e.SubjectType = domain.AuditSubjectSession
+		e.SubjectID = sessionID.String()
+		e.SessionID = sessionID.String()
+	})
+	return nil
 }
 
 func (f *Flow) loadLogoutSession(ctx context.Context, in LogoutInput) *domain.LoginSession {
@@ -214,7 +294,10 @@ func (f *Flow) resolveLogoutSessionID(ctx context.Context, in LogoutInput) uuid.
 	return sid
 }
 
-func (f *Flow) subjectFromIDTokenHint(hint string) string {
+// subjectFromIDTokenHint returns sub from a verified hint.
+// When requireFresh is true, expired (or missing-exp) hints are ignored —
+// prevents logout_scope=subject|device DoS via a long-leaked id_token_hint.
+func (f *Flow) subjectFromIDTokenHint(hint string, requireFresh bool) string {
 	if hint == "" || f.idTokens == nil {
 		return ""
 	}
@@ -223,6 +306,9 @@ func (f *Flow) subjectFromIDTokenHint(hint string) string {
 		return ""
 	}
 	if iss, _ := claims["iss"].(string); iss != "" && strings.TrimRight(iss, "/") != f.issuer() {
+		return ""
+	}
+	if requireFresh && oidc.HintExpired(claims, time.Now().UTC(), oidc.DefaultHintSkew) {
 		return ""
 	}
 	sub, _ := claims["sub"].(string)

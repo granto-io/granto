@@ -46,6 +46,7 @@ session:
   max_ttl: 720h
   # How far /oauth2/logout reaches: session (default) | device | subject.
   # device needs browser cookie granto_did → LoginSession.device_id.
+  # device|subject: GET /oauth2/logout shows confirm; POST completes (CSRF blast radius).
   logout_scope: session
 
 oauth2:
@@ -65,6 +66,19 @@ admin:
   # Prefer GRANTO_ADMIN_TOKEN in production.
   token: "change-me-in-production"
   # accept_strict: false  # true = require accept_token on Accept (see api/admin/ACCEPT_MODES.md)
+
+# Stream-only audit: durable outbox → channels (no Admin list API).
+audit:
+  enabled: true
+  channels: ["stdout"]
+  # channels: ["stdout", "webhook"]
+  # webhook:
+  #   url: "https://siem.example.com/hooks/granto-audit"
+  #   timeout: 5s
+  # outbox:
+  #   poll_interval: 1s
+  #   batch_size: 50
+  #   max_attempts: 10
 
 cors:
   enabled: false

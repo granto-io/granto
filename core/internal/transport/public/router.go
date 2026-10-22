@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/granto-io/granto/core/internal/reqmeta"
 )
 
 // Middleware is the stdlib-compatible plugin form:
@@ -50,6 +52,7 @@ func NewRouter(h *Handler, opts Options) http.Handler {
 	r.Use(recoverer(logger))
 	r.Use(requestLogger(logger))
 	r.Use(noCache)
+	r.Use(reqmeta.Middleware)
 
 	for _, mw := range opts.Middlewares {
 		if mw != nil {
@@ -72,6 +75,14 @@ func NewRouter(h *Handler, opts Options) http.Handler {
 	r.Post("/oauth2/logout", h.handleLogout) // form body params (OIDC)
 	r.Get("/userinfo", h.handleUserinfo)
 	r.Post("/userinfo", h.handleUserinfo)
+
+	// OIDC Dynamic Client Registration (RFC 7591) — same flag as Discovery.
+	if h.cfg != nil && h.cfg.OIDC.DynamicClientRegistration.Enabled {
+		r.Post("/oauth2/register", h.handleRegisterCreate)
+		r.Get("/oauth2/register/{clientID}", h.handleRegisterRead)
+		r.Put("/oauth2/register/{clientID}", h.handleRegisterUpdate)
+		r.Delete("/oauth2/register/{clientID}", h.handleRegisterDelete)
+	}
 
 	// GNAP — grant endpoint + OPTIONS discovery (RFC 9635 §2, §9)
 	r.Post("/gnap", h.handleGNAPGrant)
