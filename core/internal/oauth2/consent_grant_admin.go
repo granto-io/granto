@@ -17,7 +17,7 @@ func (f *Flow) ListConsentGrants(ctx context.Context, subject, clientID string) 
 	if f.consentGrants == nil {
 		return nil, nil
 	}
-	return f.consentGrants.ListBySubject(ctx, f.tenantID(), subject, strings.TrimSpace(clientID))
+	return f.consentGrants.ListBySubject(ctx, f.resolveTenant(ctx), subject, strings.TrimSpace(clientID))
 }
 
 // RevokeConsentGrants deletes remembered consent for subject, optionally limited
@@ -31,8 +31,9 @@ func (f *Flow) RevokeConsentGrants(ctx context.Context, subject, clientID string
 		return nil
 	}
 	clientID = strings.TrimSpace(clientID)
+	tenantID := f.resolveTenant(ctx)
 	if clientID != "" {
-		return f.consentGrants.Delete(ctx, f.tenantID(), subject, clientID)
+		return f.consentGrants.Delete(ctx, tenantID, subject, clientID)
 	}
-	return f.consentGrants.DeleteBySubject(ctx, f.tenantID(), subject)
+	return f.consentGrants.DeleteBySubject(ctx, tenantID, subject)
 }

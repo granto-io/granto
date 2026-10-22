@@ -9,6 +9,7 @@ import (
 
 	"github.com/granto-io/granto/core/internal/domain"
 	"github.com/granto-io/granto/core/internal/oauth2"
+	"github.com/granto-io/granto/core/internal/tenancy"
 )
 
 func TestAdminGetListDeleteLoginSession(t *testing.T) {
@@ -70,6 +71,41 @@ func TestAdminGetListDeleteLoginSession(t *testing.T) {
 	}
 	if _, err := d.sess.GetByID(ctx, s2.ID); err != nil {
 		t.Fatalf("s2 should remain: %v", err)
+	}
+}
+
+func TestAdminLoginSessionTenantIsolation(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+
+	otherTenant := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	foreign := &domain.LoginSession{
+		ID: uuid.New(), TenantID: otherTenant, Subject: "user-1",
+		AuthenticatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := d.sess.Create(ctx, foreign); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	authCtx := tenancy.WithID(ctx, domain.DefaultTenantID)
+	if _, err := d.flow.GetLoginSession(authCtx, foreign.ID.String()); !errors.Is(err, domain.ErrLoginSessionNotFound) {
+		t.Fatalf("Get across tenant: err=%v, want not found", err)
+	}
+	if err := d.flow.DeleteLoginSession(authCtx, foreign.ID.String()); !errors.Is(err, domain.ErrLoginSessionNotFound) {
+		t.Fatalf("Delete across tenant: err=%v, want not found", err)
+	}
+	if _, err := d.sess.GetByID(ctx, foreign.ID); err != nil {
+		t.Fatalf("foreign session must remain: %v", err)
+	}
+
+	otherCtx := tenancy.WithID(ctx, otherTenant)
+	got, err := d.flow.GetLoginSession(otherCtx, foreign.ID.String())
+	if err != nil {
+		t.Fatalf("Get as owning tenant: %v", err)
+	}
+	if got.ID != foreign.ID {
+		t.Fatalf("got %+v", got)
 	}
 }
 

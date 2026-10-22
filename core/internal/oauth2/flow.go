@@ -1,6 +1,7 @@
 package oauth2
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"github.com/granto-io/granto/core/internal/domain"
 	"github.com/granto-io/granto/core/internal/oidc"
 	"github.com/granto-io/granto/core/internal/repository"
+	"github.com/granto-io/granto/core/internal/tenancy"
 )
 
 const (
@@ -66,8 +68,16 @@ func NewFlow(
 	}
 }
 
+// tenantID is the MVP single-tenant id for public OAuth paths (no Admin auth ctx).
 func (f *Flow) tenantID() uuid.UUID {
 	return domain.DefaultTenantID
+}
+
+// resolveTenant returns the Admin auth tenant from ctx when present (D-034),
+// otherwise the public MVP tenant. Admin LoginSession / ConsentGrant must use
+// this — not tenantID() — so they follow the same isolation as Client API.
+func (f *Flow) resolveTenant(ctx context.Context) uuid.UUID {
+	return tenancy.Resolve(ctx)
 }
 
 func (f *Flow) issuer() string {

@@ -191,7 +191,7 @@ func (f *Flow) logoutTargetsByDevice(ctx context.Context, in LogoutInput) []logo
 // be valid. If revoke fails, the session is left intact.
 func (f *Flow) deleteOneLoginSession(ctx context.Context, sessionID uuid.UUID) error {
 	if f.tokens != nil {
-		if err := f.tokens.RevokeRefreshTokensBySession(ctx, f.tenantID(), sessionID); err != nil {
+		if err := f.tokens.RevokeRefreshTokensBySession(ctx, f.resolveTenant(ctx), sessionID); err != nil {
 			return fmt.Errorf("revoke refresh tokens: %w", err)
 		}
 	}
