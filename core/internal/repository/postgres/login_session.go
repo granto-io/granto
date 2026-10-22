@@ -125,14 +125,15 @@ func (r *LoginSessionRepository) ListBySubject(ctx context.Context, tenantID uui
 	return r.list(ctx, q, tenantID, subject)
 }
 
-func (r *LoginSessionRepository) ListByDeviceID(ctx context.Context, tenantID uuid.UUID, deviceID string) ([]*domain.LoginSession, error) {
+func (r *LoginSessionRepository) ListByDeviceID(ctx context.Context, tenantID uuid.UUID, deviceID, subject string) ([]*domain.LoginSession, error) {
 	const q = `SELECT` + loginSessionColumns + `
 		FROM login_sessions
 		WHERE tenant_id = $1
 		  AND device_id = $2
+		  AND subject = $3
 		ORDER BY authenticated_at DESC`
 
-	return r.list(ctx, q, tenantID, deviceID)
+	return r.list(ctx, q, tenantID, deviceID, subject)
 }
 
 func (r *LoginSessionRepository) list(ctx context.Context, q string, args ...any) ([]*domain.LoginSession, error) {

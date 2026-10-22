@@ -141,24 +141,34 @@ func (f *Flow) logoutTargetsBySubject(ctx context.Context, in LogoutInput) []log
 }
 
 func (f *Flow) logoutTargetsByDevice(ctx context.Context, in LogoutInput) []logoutTarget {
+	// Device scope = this subject's sessions on this browser, never other users
+	// sharing the same granto_did (kiosk / shared machine).
+	subject := ""
+	sess := f.loadLogoutSession(ctx, in)
+	if sess != nil {
+		subject = sess.Subject
+	}
+	if subject == "" {
+		subject = f.subjectFromIDTokenHint(in.IDTokenHint)
+	}
+
 	deviceID := ""
-	if sess := f.loadLogoutSession(ctx, in); sess != nil && strings.TrimSpace(sess.DeviceID) != "" {
+	if sess != nil && strings.TrimSpace(sess.DeviceID) != "" {
 		deviceID = strings.TrimSpace(sess.DeviceID)
 	}
 	if deviceID == "" {
 		deviceID = normalizeDeviceID(in.DeviceIDFromCookie)
 	}
-	if deviceID == "" {
+
+	if subject == "" || deviceID == "" {
+		// Without both anchors, fall back to the single resolved session only.
 		if sid := f.resolveLogoutSessionID(ctx, in); sid != uuid.Nil {
-			subject := ""
-			if sess := f.loadLogoutSession(ctx, in); sess != nil {
-				subject = sess.Subject
-			}
 			return []logoutTarget{{ID: sid, Subject: subject}}
 		}
 		return nil
 	}
-	sessions, err := f.loginSessions.ListByDeviceID(ctx, f.tenantID(), deviceID)
+
+	sessions, err := f.loginSessions.ListByDeviceID(ctx, f.tenantID(), deviceID, subject)
 	if err != nil {
 		return nil
 	}

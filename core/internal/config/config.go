@@ -91,7 +91,8 @@ const (
 type SessionConfig struct {
 	DefaultTTL time.Duration `yaml:"default_ttl"`
 	MaxTTL     time.Duration `yaml:"max_ttl"`
-	// LogoutScope controls how many LoginSessions /oauth2/logout ends:
+	// LogoutScope controls how many LoginSessions /oauth2/logout ends
+	// (device = same device_id AND subject; never cross-user on shared browsers):
 	// session (default) | device | subject.
 	LogoutScope string `yaml:"logout_scope"`
 }

@@ -135,11 +135,15 @@ func TestLogoutScopeDeviceDeletesSiblingSessions(t *testing.T) {
 		ID: uuid.New(), TenantID: domain.DefaultTenantID, Subject: "user-1",
 		DeviceID: deviceID, AuthenticatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
 	}
-	sOther := &domain.LoginSession{
+	sOtherDevice := &domain.LoginSession{
 		ID: uuid.New(), TenantID: domain.DefaultTenantID, Subject: "user-1",
 		DeviceID: keepDevice, AuthenticatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
 	}
-	for _, s := range []*domain.LoginSession{s1, s2, sOther} {
+	sOtherUser := &domain.LoginSession{
+		ID: uuid.New(), TenantID: domain.DefaultTenantID, Subject: "user-2",
+		DeviceID: deviceID, AuthenticatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	for _, s := range []*domain.LoginSession{s1, s2, sOtherDevice, sOtherUser} {
 		if err := d.sess.Create(ctx, s); err != nil {
 			t.Fatalf("Create: %v", err)
 		}
@@ -158,8 +162,11 @@ func TestLogoutScopeDeviceDeletesSiblingSessions(t *testing.T) {
 	if _, err := d.sess.GetByID(ctx, s2.ID); !errors.Is(err, domain.ErrLoginSessionNotFound) {
 		t.Fatalf("s2 should be gone, err=%v", err)
 	}
-	if _, err := d.sess.GetByID(ctx, sOther.ID); err != nil {
+	if _, err := d.sess.GetByID(ctx, sOtherDevice.ID); err != nil {
 		t.Fatalf("other device session should remain: %v", err)
+	}
+	if _, err := d.sess.GetByID(ctx, sOtherUser.ID); err != nil {
+		t.Fatalf("other subject on same device must remain: %v", err)
 	}
 }
 
