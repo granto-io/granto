@@ -69,6 +69,7 @@ func NewRouter(h *Handler, opts Options) http.Handler {
 
 	// OIDC
 	r.Get("/oauth2/logout", h.handleLogout)
+	r.Post("/oauth2/logout", h.handleLogout) // form body params (OIDC)
 	r.Get("/userinfo", h.handleUserinfo)
 	r.Post("/userinfo", h.handleUserinfo)
 

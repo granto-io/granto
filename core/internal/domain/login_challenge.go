@@ -34,6 +34,10 @@ type LoginChallenge struct {
 	SessionID uuid.UUID
 	Skip      bool
 
+	// DeviceID is the browser device cookie (granto_did) captured at authorize.
+	// Copied onto LoginSession on AcceptLogin.
+	DeviceID string
+
 	OIDCContext OIDCContext
 
 	// AcceptToken is a high-entropy secret. Never put it in the browser redirect query.

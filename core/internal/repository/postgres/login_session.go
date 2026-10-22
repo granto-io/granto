@@ -21,6 +21,7 @@ const loginSessionColumns = `
 	authenticated_at,
 	expires_at,
 	remember,
+	device_id,
 	acr,
 	amr,
 	identity_provider_session_id,
@@ -47,6 +48,7 @@ func (r *LoginSessionRepository) Create(ctx context.Context, s *domain.LoginSess
 			authenticated_at,
 			expires_at,
 			remember,
+			device_id,
 			acr,
 			amr,
 			identity_provider_session_id,
@@ -61,7 +63,8 @@ func (r *LoginSessionRepository) Create(ctx context.Context, s *domain.LoginSess
 			$7,
 			$8,
 			$9,
-			$10
+			$10,
+			$11
 		)`
 
 	meta, err := marshalJSONMap(s.Metadata)
@@ -89,6 +92,7 @@ func (r *LoginSessionRepository) Create(ctx context.Context, s *domain.LoginSess
 		s.AuthenticatedAt,
 		s.ExpiresAt,
 		s.Remember,
+		s.DeviceID,
 		s.ACR,
 		amr,
 		nullableStr(s.IdentityProviderSessionID),
@@ -118,7 +122,21 @@ func (r *LoginSessionRepository) ListBySubject(ctx context.Context, tenantID uui
 		  AND subject = $2
 		ORDER BY authenticated_at DESC`
 
-	rows, err := r.db.Conn(ctx).Query(ctx, q, tenantID, subject)
+	return r.list(ctx, q, tenantID, subject)
+}
+
+func (r *LoginSessionRepository) ListByDeviceID(ctx context.Context, tenantID uuid.UUID, deviceID string) ([]*domain.LoginSession, error) {
+	const q = `SELECT` + loginSessionColumns + `
+		FROM login_sessions
+		WHERE tenant_id = $1
+		  AND device_id = $2
+		ORDER BY authenticated_at DESC`
+
+	return r.list(ctx, q, tenantID, deviceID)
+}
+
+func (r *LoginSessionRepository) list(ctx context.Context, q string, args ...any) ([]*domain.LoginSession, error) {
+	rows, err := r.db.Conn(ctx).Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list login sessions: %w", err)
 	}
@@ -168,6 +186,7 @@ func scanLoginSession(row scanner) (*domain.LoginSession, error) {
 		authenticatedAt time.Time
 		expiresAt       time.Time
 		remember        bool
+		deviceID        string
 		acr             string
 		amr             []string
 		idpSessionID    pgtype.Text
@@ -183,6 +202,7 @@ func scanLoginSession(row scanner) (*domain.LoginSession, error) {
 		&authenticatedAt,
 		&expiresAt,
 		&remember,
+		&deviceID,
 		&acr,
 		&amr,
 		&idpSessionID,
@@ -206,6 +226,7 @@ func scanLoginSession(row scanner) (*domain.LoginSession, error) {
 		AuthenticatedAt:           authenticatedAt,
 		ExpiresAt:                 expiresAt,
 		Remember:                  remember,
+		DeviceID:                  deviceID,
 		ACR:                       acr,
 		AMR:                       amr,
 		IdentityProviderSessionID: idpSessionID.String,

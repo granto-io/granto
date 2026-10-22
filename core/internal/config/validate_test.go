@@ -62,6 +62,7 @@ func TestValidate(t *testing.T) {
 		{name: "missing postgres dsn", mutate: func(c *Config) { c.Postgres.DSN = "" }, wantSub: "postgres.dsn"},
 		{name: "missing admin token", mutate: func(c *Config) { c.Admin.Token = "" }, wantSub: "admin.token"},
 		{name: "missing login url", mutate: func(c *Config) { c.OAuth2.LoginURL = "" }, wantSub: "oauth2.login_url"},
+		{name: "bad logout scope", mutate: func(c *Config) { c.Session.LogoutScope = "all" }, wantSub: "session.logout_scope"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

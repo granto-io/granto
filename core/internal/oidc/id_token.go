@@ -87,6 +87,18 @@ func (s *IDTokens) Issue(_ context.Context, in IssueInput) (string, error) {
 	return signed, nil
 }
 
+// ParseHint verifies an id_token_hint signature (exp may be ignored by the key parser).
+func (s *IDTokens) ParseHint(raw string) (jwt.MapClaims, error) {
+	if s == nil || s.keys == nil {
+		return nil, fmt.Errorf("id token verifier not configured")
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("empty id_token_hint")
+	}
+	return s.keys.ParseJWT(raw)
+}
+
 func mergeIDTokenExtra(claims jwt.MapClaims, extra map[string]any) {
 	if extra == nil {
 		return

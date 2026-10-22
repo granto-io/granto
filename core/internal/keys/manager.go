@@ -98,6 +98,33 @@ func (m *Manager) SignJWT(claims jwt.MapClaims) (string, error) {
 	return token.SignedString(m.privateKey)
 }
 
+// ParseJWT verifies an RS256 JWT with the active public key.
+// Expiration and other registered claims are not enforced (callers may
+// accept expired id_token_hint on logout).
+func (m *Manager) ParseJWT(tokenString string) (jwt.MapClaims, error) {
+	m.mu.RLock()
+	priv := m.privateKey
+	m.mu.RUnlock()
+	if priv == nil {
+		return nil, fmt.Errorf("signing key not loaded")
+	}
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	tok, err := parser.Parse(tokenString, func(t *jwt.Token) (any, error) {
+		if t.Method != jwt.SigningMethodRS256 {
+			return nil, fmt.Errorf("unexpected signing method %v", t.Header["alg"])
+		}
+		return &priv.PublicKey, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	claims, ok := tok.Claims.(jwt.MapClaims)
+	if !ok || !tok.Valid {
+		return nil, fmt.Errorf("invalid token claims")
+	}
+	return claims, nil
+}
+
 // JWKS returns the public JWKS for the active key set.
 // Results are cached in memory until signing keys are reloaded.
 func (m *Manager) JWKS(ctx context.Context) (*JWKSet, error) {

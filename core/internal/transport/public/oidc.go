@@ -33,7 +33,64 @@ func (h *Handler) handleJWKS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
-	h.notImplemented(w, r, "logout")
+	if h.flow == nil {
+		h.notImplemented(w, r, "logout")
+		return
+	}
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "invalid form body")
+			return
+		}
+	}
+	q := r.URL.Query()
+	form := r.Form
+	get := func(name string) string {
+		if v := strings.TrimSpace(q.Get(name)); v != "" {
+			return v
+		}
+		if form != nil {
+			return strings.TrimSpace(form.Get(name))
+		}
+		return ""
+	}
+	in := oauth2.LogoutInput{
+		IDTokenHint:        get("id_token_hint"),
+		ClientID:           get("client_id"),
+		PostLogoutRedirect: get("post_logout_redirect_uri"),
+		State:              get("state"),
+	}
+	if c, err := r.Cookie(oauth2.SessionCookieName); err == nil {
+		in.SessionIDFromCookie = c.Value
+	}
+	if c, err := r.Cookie(oauth2.DeviceCookieName); err == nil {
+		in.DeviceIDFromCookie = c.Value
+	}
+	res, err := h.flow.Logout(r.Context(), in)
+	if err != nil {
+		h.writeLogoutError(w, err)
+		return
+	}
+	if res.ClearCookie {
+		h.clearSessionCookie(w)
+	}
+	if res.RedirectTo != "" {
+		http.Redirect(w, r, res.RedirectTo, http.StatusFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("Logged out"))
+}
+
+func (h *Handler) writeLogoutError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, oauth2.ErrInvalidRequest):
+		writeOAuthError(w, http.StatusBadRequest, "invalid_request", err.Error())
+	default:
+		h.logger.Error("logout error", "err", err)
+		writeOAuthError(w, http.StatusInternalServerError, "server_error", "internal error")
+	}
 }
 
 func (h *Handler) handleUserinfo(w http.ResponseWriter, r *http.Request) {

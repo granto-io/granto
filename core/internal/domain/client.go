@@ -113,6 +113,15 @@ func (c *Client) HasRedirectURI(uri string) bool {
 	return false
 }
 
+func (c *Client) HasPostLogoutURI(uri string) bool {
+	for _, u := range c.PostLogoutURIs {
+		if u == uri {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Client) HasScope(scope string) bool {
 	for _, s := range c.AllowedScopes {
 		if s == scope {

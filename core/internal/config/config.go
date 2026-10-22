@@ -80,10 +80,20 @@ func (c TokenConfig) HasStaticSigningKey() bool {
 		strings.TrimSpace(c.SigningKeys.PrivateKeyPEM) != ""
 }
 
-// SessionConfig holds session TTL bounds.
+// Logout scope values for SessionConfig.LogoutScope.
+const (
+	LogoutScopeSession = "session"
+	LogoutScopeDevice  = "device"
+	LogoutScopeSubject = "subject"
+)
+
+// SessionConfig holds session TTL bounds and logout breadth.
 type SessionConfig struct {
 	DefaultTTL time.Duration `yaml:"default_ttl"`
 	MaxTTL     time.Duration `yaml:"max_ttl"`
+	// LogoutScope controls how many LoginSessions /oauth2/logout ends:
+	// session (default) | device | subject.
+	LogoutScope string `yaml:"logout_scope"`
 }
 
 // OAuth2Config holds OAuth2 flow URLs (login/consent UI lives outside core).

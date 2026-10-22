@@ -30,6 +30,8 @@ type AuthorizeInput struct {
 	Display   string
 	// ExistingSessionID from SSO cookie (may be empty / invalid).
 	ExistingSessionID string
+	// DeviceID from browser device cookie (granto_did); stored on LoginChallenge.
+	DeviceID string
 	// RequestURL is the full authorize URL for challenge.RequestURL.
 	RequestURL string
 }
@@ -169,6 +171,7 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 		CodeChallengeMethod: in.CodeChallengeMethod,
 		SessionID:           sessionID,
 		Skip:                false,
+		DeviceID:            strings.TrimSpace(in.DeviceID),
 		OIDCContext:         oidcCtx,
 		ExpiresAt:           now.Add(defaultChallengeTTL),
 		CreatedAt:           now,
