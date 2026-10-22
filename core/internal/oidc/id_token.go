@@ -3,6 +3,7 @@ package oidc
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -126,10 +127,5 @@ func mergeIDTokenExtra(claims jwt.MapClaims, extra map[string]any) {
 }
 
 func containsScope(scopes []string, want string) bool {
-	for _, s := range scopes {
-		if s == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(scopes, want)
 }
