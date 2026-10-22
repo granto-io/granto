@@ -73,6 +73,14 @@ func NewRouter(h *Handler, opts Options) http.Handler {
 	r.Get("/userinfo", h.handleUserinfo)
 	r.Post("/userinfo", h.handleUserinfo)
 
+	// OIDC Dynamic Client Registration (RFC 7591) — same flag as Discovery.
+	if h.cfg != nil && h.cfg.OIDC.DynamicClientRegistration.Enabled {
+		r.Post("/oauth2/register", h.handleRegisterCreate)
+		r.Get("/oauth2/register/{clientID}", h.handleRegisterRead)
+		r.Put("/oauth2/register/{clientID}", h.handleRegisterUpdate)
+		r.Delete("/oauth2/register/{clientID}", h.handleRegisterDelete)
+	}
+
 	// GNAP — grant endpoint + OPTIONS discovery (RFC 9635 §2, §9)
 	r.Post("/gnap", h.handleGNAPGrant)
 	r.Options("/gnap", h.handleGNAPDiscovery)
