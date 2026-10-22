@@ -46,6 +46,7 @@ session:
   max_ttl: 720h
   # How far /oauth2/logout reaches: session (default) | device | subject.
   # device needs browser cookie granto_did → LoginSession.device_id.
+  # device|subject: GET /oauth2/logout shows confirm; POST completes (CSRF blast radius).
   logout_scope: session
 
 oauth2:
