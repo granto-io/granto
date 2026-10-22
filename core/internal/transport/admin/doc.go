@@ -8,6 +8,7 @@
 //	client.go, client_mapper.go, client_secret.go
 //	oauth2.go, oauth2_errors.go
 //	session.go                 // LoginSession Admin CRUD / Hydra-like revoke
+//	consent_grant.go           // ConsentGrant list / revoke
 //	server.go, auth.go, tenant.go
 //	errors.go, doc.go
 package admin

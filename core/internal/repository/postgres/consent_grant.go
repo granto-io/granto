@@ -123,6 +123,46 @@ func (r *ConsentGrantRepository) Get(ctx context.Context, tenantID uuid.UUID, su
 	return g, nil
 }
 
+// ListBySubject returns grants for subject (optional clientID filter), including expired.
+func (r *ConsentGrantRepository) ListBySubject(ctx context.Context, tenantID uuid.UUID, subject, clientID string) ([]*domain.ConsentGrant, error) {
+	var (
+		q    string
+		args []any
+	)
+	if clientID != "" {
+		q = `SELECT` + consentGrantColumns + `
+			FROM consent_grants
+			WHERE tenant_id = $1
+			  AND subject = $2
+			  AND client_id = $3
+			ORDER BY updated_at DESC`
+		args = []any{tenantID, subject, clientID}
+	} else {
+		q = `SELECT` + consentGrantColumns + `
+			FROM consent_grants
+			WHERE tenant_id = $1
+			  AND subject = $2
+			ORDER BY updated_at DESC`
+		args = []any{tenantID, subject}
+	}
+
+	rows, err := r.db.Conn(ctx).Query(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list consent grants: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.ConsentGrant
+	for rows.Next() {
+		g, err := scanConsentGrant(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+
 // Delete removes a grant (idempotent).
 func (r *ConsentGrantRepository) Delete(ctx context.Context, tenantID uuid.UUID, subject, clientID string) error {
 	q := `
@@ -133,6 +173,19 @@ func (r *ConsentGrantRepository) Delete(ctx context.Context, tenantID uuid.UUID,
 	_, err := r.db.Conn(ctx).Exec(ctx, q, tenantID, subject, clientID)
 	if err != nil {
 		return fmt.Errorf("delete consent grant: %w", err)
+	}
+	return nil
+}
+
+// DeleteBySubject removes all grants for subject (idempotent).
+func (r *ConsentGrantRepository) DeleteBySubject(ctx context.Context, tenantID uuid.UUID, subject string) error {
+	q := `
+		DELETE FROM consent_grants
+		WHERE tenant_id = $1
+		  AND subject = $2`
+	_, err := r.db.Conn(ctx).Exec(ctx, q, tenantID, subject)
+	if err != nil {
+		return fmt.Errorf("delete consent grants by subject: %w", err)
 	}
 	return nil
 }

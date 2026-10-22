@@ -32,6 +32,7 @@ func NewServer(
 	clients adminv1.ClientServiceServer,
 	oauth2 adminv1.OAuth2ServiceServer,
 	sessions adminv1.LoginSessionServiceServer,
+	grants adminv1.ConsentGrantServiceServer,
 	cfg *config.Config,
 ) *Server {
 	grpcSrv := grpc.NewServer(
@@ -40,6 +41,7 @@ func NewServer(
 	adminv1.RegisterClientServiceServer(grpcSrv, clients)
 	adminv1.RegisterOAuth2ServiceServer(grpcSrv, oauth2)
 	adminv1.RegisterLoginSessionServiceServer(grpcSrv, sessions)
+	adminv1.RegisterConsentGrantServiceServer(grpcSrv, grants)
 
 	hs := health.NewServer()
 	healthpb.RegisterHealthServer(grpcSrv, hs)
@@ -87,6 +89,10 @@ func (s *Server) RunGateway(ctx context.Context, httpAddr, grpcAddr string) erro
 	if err := adminv1.RegisterLoginSessionServiceHandler(ctx, mux, conn); err != nil {
 		_ = conn.Close()
 		return fmt.Errorf("register login-session gateway: %w", err)
+	}
+	if err := adminv1.RegisterConsentGrantServiceHandler(ctx, mux, conn); err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("register consent-grant gateway: %w", err)
 	}
 
 	s.httpSrv = &http.Server{

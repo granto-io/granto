@@ -19,6 +19,8 @@ func domainErrToStatus(err error) error {
 		return status.Error(codes.NotFound, err.Error())
 	case errors.Is(err, domain.ErrLoginSessionNotFound):
 		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, domain.ErrConsentGrantNotFound):
+		return status.Error(codes.NotFound, err.Error())
 	default:
 		return internalStatus(err)
 	}

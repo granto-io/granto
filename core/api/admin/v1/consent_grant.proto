@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package granto.admin.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/granto-io/granto/core/gen/admin/v1;adminv1";
+
+// ConsentGrantService manages remembered consents (subject × client).
+// Revoke deletes the grant row(s) so the next authorize shows consent UI again.
+// Unlike ORY Hydra revokeOAuth2ConsentSessions, this does not yet invalidate
+// outstanding access/refresh tokens (token revoke-by-subject — later).
+service ConsentGrantService {
+  rpc ListConsentGrants(ListConsentGrantsRequest) returns (ListConsentGrantsResponse) {
+    option (google.api.http) = {
+      get: "/admin/v1/consent-grants"
+      additional_bindings {
+        get: "/admin/oauth2/auth/sessions/consent"
+      }
+    };
+  }
+
+  rpc RevokeConsentGrants(RevokeConsentGrantsRequest) returns (RevokeConsentGrantsResponse) {
+    option (google.api.http) = {
+      delete: "/admin/v1/consent-grants"
+      additional_bindings {
+        delete: "/admin/oauth2/auth/sessions/consent"
+      }
+    };
+  }
+}
+
+// ConsentGrant is the admin view of domain.ConsentGrant.
+message ConsentGrant {
+  string id = 1;
+  string tenant_id = 2;
+  string subject = 3;
+  string client_id = 4;
+  repeated string scopes = 5;
+  repeated string audience = 6;
+  // Absent / unset means the grant does not expire.
+  google.protobuf.Timestamp expires_at = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message ListConsentGrantsRequest {
+  // Required.
+  string subject = 1;
+  // Optional. When set, only the grant for this client_id.
+  string client_id = 2;
+}
+
+message ListConsentGrantsResponse {
+  repeated ConsentGrant grants = 1;
+}
+
+message RevokeConsentGrantsRequest {
+  // Required.
+  string subject = 1;
+  // Optional. When set, revoke only that client; otherwise all grants for subject.
+  // Hydra used query name "client"; Granto uses client_id on both paths.
+  string client_id = 2;
+}
+
+message RevokeConsentGrantsResponse {}

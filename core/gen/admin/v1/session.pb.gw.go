@@ -41,6 +41,9 @@ func request_LoginSessionService_GetLoginSession_0(ctx context.Context, marshale
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
 	val, ok := pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
@@ -48,9 +51,6 @@ func request_LoginSessionService_GetLoginSession_0(ctx context.Context, marshale
 	protoReq.Id, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	msg, err := client.GetLoginSession(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -81,14 +81,14 @@ func request_LoginSessionService_ListLoginSessions_0(ctx context.Context, marsha
 		protoReq ListLoginSessionsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_LoginSessionService_ListLoginSessions_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	msg, err := client.ListLoginSessions(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -115,6 +115,9 @@ func request_LoginSessionService_DeleteLoginSession_0(ctx context.Context, marsh
 		metadata runtime.ServerMetadata
 		err      error
 	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
 	val, ok := pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
@@ -122,9 +125,6 @@ func request_LoginSessionService_DeleteLoginSession_0(ctx context.Context, marsh
 	protoReq.Id, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	msg, err := client.DeleteLoginSession(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -155,14 +155,14 @@ func request_LoginSessionService_RevokeLoginSessions_0(ctx context.Context, mars
 		protoReq RevokeLoginSessionsRequest
 		metadata runtime.ServerMetadata
 	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_LoginSessionService_RevokeLoginSessions_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	msg, err := client.RevokeLoginSessions(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err

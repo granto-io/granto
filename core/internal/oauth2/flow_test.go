@@ -331,8 +331,38 @@ func (m *memGrants) Get(_ context.Context, _ uuid.UUID, subject, clientID string
 	cp := *g
 	return &cp, nil
 }
+func (m *memGrants) ListBySubject(_ context.Context, _ uuid.UUID, subject, clientID string) ([]*domain.ConsentGrant, error) {
+	var out []*domain.ConsentGrant
+	for _, g := range m.byKey {
+		if g.Subject != subject {
+			continue
+		}
+		if clientID != "" && g.ClientID != clientID {
+			continue
+		}
+		cp := *g
+		if cp.Scopes != nil {
+			cp.Scopes = append([]string(nil), g.Scopes...)
+		}
+		if cp.Audience != nil {
+			cp.Audience = append([]string(nil), g.Audience...)
+		}
+		out = append(out, &cp)
+	}
+	return out, nil
+}
+
 func (m *memGrants) Delete(_ context.Context, _ uuid.UUID, subject, clientID string) error {
 	delete(m.byKey, grantKey(subject, clientID))
+	return nil
+}
+
+func (m *memGrants) DeleteBySubject(_ context.Context, _ uuid.UUID, subject string) error {
+	for k, g := range m.byKey {
+		if g.Subject == subject {
+			delete(m.byKey, k)
+		}
+	}
 	return nil
 }
 
