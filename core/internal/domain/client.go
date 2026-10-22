@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -96,37 +97,17 @@ func (c *Client) IsTrustedClient() bool {
 }
 
 func (c *Client) HasGrantType(grantType GrantType) bool {
-	for _, g := range c.GrantTypes {
-		if g == grantType {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.GrantTypes, grantType)
 }
 
 func (c *Client) HasRedirectURI(uri string) bool {
-	for _, u := range c.RedirectURIs {
-		if u == uri {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.RedirectURIs, uri)
 }
 
 func (c *Client) HasPostLogoutURI(uri string) bool {
-	for _, u := range c.PostLogoutURIs {
-		if u == uri {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.PostLogoutURIs, uri)
 }
 
 func (c *Client) HasScope(scope string) bool {
-	for _, s := range c.AllowedScopes {
-		if s == scope {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.AllowedScopes, scope)
 }

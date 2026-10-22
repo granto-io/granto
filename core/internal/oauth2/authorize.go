@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -131,9 +132,9 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 		}
 	}
 
-	forceLogin := promptHas(prompt, "login") || promptHas(prompt, "select_account")
+	forceLogin := slices.Contains(prompt, "login") || slices.Contains(prompt, "select_account")
 	if sess != nil && maxAgeSet && sessionExceedsMaxAge(sess, maxAge, now) {
-		if promptHas(prompt, "none") {
+		if slices.Contains(prompt, "none") {
 			return nil, toClient(fmt.Errorf("%w: authentication time exceeds max_age", ErrLoginRequired))
 		}
 		forceLogin = true
@@ -146,9 +147,9 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 	}
 
 	if skipLogin {
-		forceConsent := promptHas(prompt, "consent")
+		forceConsent := slices.Contains(prompt, "consent")
 		canSkip := !forceConsent && f.canSkipConsentUI(ctx, client, subject, scopes, nil)
-		if !canSkip && promptHas(prompt, "none") {
+		if !canSkip && slices.Contains(prompt, "none") {
 			return nil, toClient(fmt.Errorf("%w: consent is required", ErrConsentRequired))
 		}
 		if canSkip {
@@ -197,7 +198,7 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 		return &AuthorizeResult{RedirectTo: redirect}, nil
 	}
 
-	if promptHas(prompt, "none") {
+	if slices.Contains(prompt, "none") {
 		return nil, toClient(fmt.Errorf("%w: no existing login session", ErrLoginRequired))
 	}
 
@@ -297,15 +298,6 @@ func parseMaxAge(raw string) (seconds int64, set bool, err error) {
 		return 0, false, fmt.Errorf("%w: max_age must be a non-negative integer", ErrInvalidRequest)
 	}
 	return v, true, nil
-}
-
-func promptHas(prompt []string, value string) bool {
-	for _, p := range prompt {
-		if p == value {
-			return true
-		}
-	}
-	return false
 }
 
 func sessionExceedsMaxAge(sess *domain.LoginSession, maxAge int64, now time.Time) bool {

@@ -3,6 +3,7 @@ package oauth2
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/granto-io/granto/core/internal/domain"
@@ -37,12 +38,7 @@ func (f *Flow) UserInfo(ctx context.Context, accessToken string) (map[string]any
 }
 
 func containsScope(scopes []string, want string) bool {
-	for _, s := range scopes {
-		if s == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(scopes, want)
 }
 
 // mergeUserInfoExtra copies consent-session claims into the UserInfo response.
