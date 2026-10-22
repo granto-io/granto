@@ -54,7 +54,8 @@ func InitializeApp(configPath ConfigPath) (*app.App, error) {
 	httpHandler := providePublicRouter(handler, logger)
 	clientServer := admin.NewClientServer(clientRepository)
 	oAuth2Server := admin.NewOAuth2Server(flow)
-	server := admin.NewServer(clientServer, oAuth2Server, config)
+	loginSessionServer := admin.NewLoginSessionServer(flow)
+	server := admin.NewServer(clientServer, oAuth2Server, loginSessionServer, config)
 	appApp := app.NewApp(config, logger, httpHandler, db, client, loginSessionRepository, loginChallengeRepository, consentChallengeRepository, flowVerifierRepository, authorizationCodeRepository, tokenRepository, server)
 	return appApp, nil
 }

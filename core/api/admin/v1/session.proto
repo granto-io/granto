@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package granto.admin.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/granto-io/granto/core/gen/admin/v1;adminv1";
+
+// LoginSessionService manages AS authentication sessions (SSO cookie / OIDC sid).
+// Delete also revokes refresh tokens bound to the session(s) — unlike ORY Hydra's
+// revokeOAuth2LoginSessions, which leaves tokens intact.
+service LoginSessionService {
+  rpc GetLoginSession(GetLoginSessionRequest) returns (GetLoginSessionResponse) {
+    option (google.api.http) = {
+      get: "/admin/v1/login-sessions/{id}"
+    };
+  }
+
+  rpc ListLoginSessions(ListLoginSessionsRequest) returns (ListLoginSessionsResponse) {
+    option (google.api.http) = {
+      get: "/admin/v1/login-sessions"
+    };
+  }
+
+  rpc DeleteLoginSession(DeleteLoginSessionRequest) returns (DeleteLoginSessionResponse) {
+    option (google.api.http) = {
+      delete: "/admin/v1/login-sessions/{id}"
+    };
+  }
+
+  // RevokeLoginSessions is Hydra-compatible: DELETE /admin/oauth2/auth/sessions/login
+  // with query subject=… (all sessions for subject) or sid=… (one session).
+  // Exactly one of subject or sid is required.
+  rpc RevokeLoginSessions(RevokeLoginSessionsRequest) returns (RevokeLoginSessionsResponse) {
+    option (google.api.http) = {
+      delete: "/admin/oauth2/auth/sessions/login"
+    };
+  }
+}
+
+// LoginSession is the admin view of domain.LoginSession.
+message LoginSession {
+  string id = 1;
+  string tenant_id = 2;
+  string subject = 3;
+  google.protobuf.Timestamp authenticated_at = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  bool remember = 6;
+  string device_id = 7;
+  string acr = 8;
+  repeated string amr = 9;
+  string identity_provider_session_id = 10;
+  google.protobuf.Struct metadata = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message GetLoginSessionRequest {
+  string id = 1;
+}
+
+message GetLoginSessionResponse {
+  LoginSession session = 1;
+}
+
+message ListLoginSessionsRequest {
+  // Required. Lists sessions for this subject within the auth tenant.
+  string subject = 1;
+}
+
+message ListLoginSessionsResponse {
+  repeated LoginSession sessions = 1;
+}
+
+message DeleteLoginSessionRequest {
+  string id = 1;
+}
+
+message DeleteLoginSessionResponse {}
+
+message RevokeLoginSessionsRequest {
+  string subject = 1;
+  // sid is the login session id (OIDC sid / granto_sid value).
+  string sid = 2;
+}
+
+message RevokeLoginSessionsResponse {}
