@@ -173,10 +173,10 @@ func (m *memSessions) GetByID(_ context.Context, id uuid.UUID) (*domain.LoginSes
 	return &cp, nil
 }
 
-func (m *memSessions) ListBySubject(_ context.Context, _ uuid.UUID, subject string) ([]*domain.LoginSession, error) {
+func (m *memSessions) ListBySubject(_ context.Context, tenantID uuid.UUID, subject string) ([]*domain.LoginSession, error) {
 	var out []*domain.LoginSession
 	for _, s := range m.byID {
-		if s.Subject == subject {
+		if s.TenantID == tenantID && s.Subject == subject {
 			cp := *s
 			out = append(out, &cp)
 		}
@@ -184,10 +184,10 @@ func (m *memSessions) ListBySubject(_ context.Context, _ uuid.UUID, subject stri
 	return out, nil
 }
 
-func (m *memSessions) ListByDeviceID(_ context.Context, _ uuid.UUID, deviceID, subject string) ([]*domain.LoginSession, error) {
+func (m *memSessions) ListByDeviceID(_ context.Context, tenantID uuid.UUID, deviceID, subject string) ([]*domain.LoginSession, error) {
 	var out []*domain.LoginSession
 	for _, s := range m.byID {
-		if s.DeviceID == deviceID && s.Subject == subject {
+		if s.TenantID == tenantID && s.DeviceID == deviceID && s.Subject == subject {
 			cp := *s
 			out = append(out, &cp)
 		}
@@ -323,18 +323,18 @@ func (m *memGrants) Upsert(_ context.Context, g *domain.ConsentGrant) error {
 	m.byKey[grantKey(g.Subject, g.ClientID)] = &cp
 	return nil
 }
-func (m *memGrants) Get(_ context.Context, _ uuid.UUID, subject, clientID string) (*domain.ConsentGrant, error) {
+func (m *memGrants) Get(_ context.Context, tenantID uuid.UUID, subject, clientID string) (*domain.ConsentGrant, error) {
 	g, ok := m.byKey[grantKey(subject, clientID)]
-	if !ok || g.IsExpired() {
+	if !ok || g.IsExpired() || g.TenantID != tenantID {
 		return nil, domain.ErrConsentGrantNotFound
 	}
 	cp := *g
 	return &cp, nil
 }
-func (m *memGrants) ListBySubject(_ context.Context, _ uuid.UUID, subject, clientID string) ([]*domain.ConsentGrant, error) {
+func (m *memGrants) ListBySubject(_ context.Context, tenantID uuid.UUID, subject, clientID string) ([]*domain.ConsentGrant, error) {
 	var out []*domain.ConsentGrant
 	for _, g := range m.byKey {
-		if g.Subject != subject {
+		if g.TenantID != tenantID || g.Subject != subject {
 			continue
 		}
 		if clientID != "" && g.ClientID != clientID {
@@ -352,14 +352,17 @@ func (m *memGrants) ListBySubject(_ context.Context, _ uuid.UUID, subject, clien
 	return out, nil
 }
 
-func (m *memGrants) Delete(_ context.Context, _ uuid.UUID, subject, clientID string) error {
-	delete(m.byKey, grantKey(subject, clientID))
+func (m *memGrants) Delete(_ context.Context, tenantID uuid.UUID, subject, clientID string) error {
+	g, ok := m.byKey[grantKey(subject, clientID)]
+	if ok && g.TenantID == tenantID {
+		delete(m.byKey, grantKey(subject, clientID))
+	}
 	return nil
 }
 
-func (m *memGrants) DeleteBySubject(_ context.Context, _ uuid.UUID, subject string) error {
+func (m *memGrants) DeleteBySubject(_ context.Context, tenantID uuid.UUID, subject string) error {
 	for k, g := range m.byKey {
-		if g.Subject == subject {
+		if g.TenantID == tenantID && g.Subject == subject {
 			delete(m.byKey, k)
 		}
 	}

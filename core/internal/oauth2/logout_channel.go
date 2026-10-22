@@ -46,13 +46,14 @@ func (f *Flow) prepareSessionChannels(ctx context.Context, target logoutTarget) 
 	if f.tokens == nil || target.ID == uuid.Nil {
 		return nil, nil
 	}
-	clientIDs, err := f.tokens.ListClientIDsBySession(ctx, f.tenantID(), target.ID)
+	tenantID := f.resolveTenant(ctx)
+	clientIDs, err := f.tokens.ListClientIDsBySession(ctx, tenantID, target.ID)
 	if err != nil || len(clientIDs) == 0 {
 		return nil, nil
 	}
 	issuer := f.issuer()
 	for _, cid := range clientIDs {
-		client, err := f.clients.GetByClientID(ctx, f.tenantID(), cid)
+		client, err := f.clients.GetByClientID(ctx, tenantID, cid)
 		if err != nil {
 			continue
 		}
