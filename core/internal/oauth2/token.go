@@ -109,8 +109,10 @@ func (f *Flow) RefreshToken(ctx context.Context, in RefreshTokenInput) (*TokenRe
 	if old.ClientID != in.ClientID {
 		return nil, ErrInvalidGrant
 	}
+	var sess *domain.LoginSession
 	if old.SessionID != uuid.Nil {
-		sess, err := f.loginSessions.GetByID(ctx, old.SessionID)
+		var err error
+		sess, err = f.loginSessions.GetByID(ctx, old.SessionID)
 		if err != nil || sess.IsExpired() {
 			_ = f.tokens.RevokeRefreshToken(ctx, f.tenantID(), oldHash)
 			return nil, ErrSessionExpired
@@ -147,6 +149,7 @@ func (f *Flow) RefreshToken(ctx context.Context, in RefreshTokenInput) (*TokenRe
 	resp, err := f.issueTokens(ctx, client, issueTokenOpts{
 		subject:     old.Subject,
 		sessionID:   old.SessionID,
+		session:     sess, // reuse: avoid second GetByID in issueIDToken
 		scopes:      scopes,
 		audience:    old.Audience,
 		extra:       old.Extra,
@@ -162,6 +165,7 @@ func (f *Flow) RefreshToken(ctx context.Context, in RefreshTokenInput) (*TokenRe
 type issueTokenOpts struct {
 	subject     string
 	sessionID   uuid.UUID
+	session     *domain.LoginSession // optional; when set, issueIDToken skips GetByID
 	scopes      []string
 	audience    []string
 	extra       map[string]any
@@ -246,7 +250,10 @@ func (f *Flow) issueIDToken(ctx context.Context, client *domain.Client, opts iss
 		return "", nil
 	}
 	var authTime time.Time
-	if opts.sessionID != uuid.Nil {
+	switch {
+	case opts.session != nil:
+		authTime = opts.session.AuthenticatedAt
+	case opts.sessionID != uuid.Nil:
 		if sess, err := f.loginSessions.GetByID(ctx, opts.sessionID); err == nil {
 			authTime = sess.AuthenticatedAt
 		}

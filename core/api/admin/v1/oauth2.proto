@@ -149,6 +149,14 @@ message AcceptConsentBody {
   AcceptConsentRequestSession session = 5;
   google.protobuf.Struct context = 6;
   string accept_token = 7;
+  // Presence flags for repeated fields (proto3 has no presence on repeated).
+  // When false/omitted: grant_* defaults to the challenge's requested_* (Hydra-like).
+  // When true: use grant_* as-is, including an empty list (user denied all).
+  // Native gRPC clients must set these to express an explicit empty grant.
+  // REST/JSON: sending "grant_scope": [] is still detected without the flag
+  // (non-nil empty slice after JSON unmarshal); the flag is recommended for clarity.
+  bool grant_scope_set = 8;
+  bool grant_access_token_audience_set = 9;
 }
 
 message AcceptConsentRequestRequest {

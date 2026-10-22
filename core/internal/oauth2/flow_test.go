@@ -2,8 +2,12 @@ package oauth2_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"strings"
 	"testing"
@@ -14,7 +18,9 @@ import (
 
 	"github.com/granto-io/granto/core/internal/config"
 	"github.com/granto-io/granto/core/internal/domain"
+	"github.com/granto-io/granto/core/internal/keys"
 	"github.com/granto-io/granto/core/internal/oauth2"
+	"github.com/granto-io/granto/core/internal/oidc"
 	"github.com/granto-io/granto/core/internal/repository"
 )
 
@@ -141,7 +147,8 @@ func (m *memConsentChallenges) Delete(_ context.Context, _, id uuid.UUID) error 
 }
 
 type memSessions struct {
-	byID map[uuid.UUID]*domain.LoginSession
+	byID     map[uuid.UUID]*domain.LoginSession
+	getCalls int
 }
 
 func (m *memSessions) Create(_ context.Context, s *domain.LoginSession) error {
@@ -157,6 +164,7 @@ func (m *memSessions) Create(_ context.Context, s *domain.LoginSession) error {
 }
 
 func (m *memSessions) GetByID(_ context.Context, id uuid.UUID) (*domain.LoginSession, error) {
+	m.getCalls++
 	s, ok := m.byID[id]
 	if !ok {
 		return nil, domain.ErrLoginSessionNotFound
@@ -291,6 +299,7 @@ func (m *memGrants) Delete(_ context.Context, _ uuid.UUID, subject, clientID str
 }
 
 type testDeps struct {
+	cfg     *config.Config
 	flow    *oauth2.Flow
 	login   *memLoginChallenges
 	consent *memConsentChallenges
@@ -320,6 +329,7 @@ func newTestFlow(t *testing.T, strict bool) *testDeps {
 		Admin: config.AdminConfig{AcceptStrict: strict},
 	}
 	d := &testDeps{
+		cfg:     cfg,
 		login:   &memLoginChallenges{},
 		consent: &memConsentChallenges{},
 		codes:   &memCodes{},
@@ -470,8 +480,9 @@ func TestAcceptLoginDefaultThenAcceptConsent(t *testing.T) {
 	}
 
 	redirect2, err := d.flow.AcceptConsent(ctx, oauth2.AcceptConsentInput{
-		ChallengeID: consent.ID.String(),
-		GrantScope:  []string{"openid"},
+		ChallengeID:   consent.ID.String(),
+		GrantScope:    []string{"openid"},
+		GrantScopeSet: true,
 	})
 	if err != nil {
 		t.Fatalf("AcceptConsent: %v", err)
@@ -680,6 +691,92 @@ func TestExchangeCodeAndRefresh(t *testing.T) {
 	}
 }
 
+func TestRefreshTokenLoadsSessionOnceWithIDToken(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(priv),
+	})
+	d.cfg.Token.SigningKeys = config.SigningKeysConfig{
+		PrivateKeyPEM: string(pemBytes),
+		KID:           "test-kid",
+	}
+	keyMgr, err := keys.NewManager(ctx, d.cfg, nil, nil)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	d.flow = oauth2.NewFlow(
+		d.cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{},
+		d.codes, d.tokens, d.grants, oidc.NewIDTokens(d.cfg, keyMgr),
+	)
+
+	sess := &domain.LoginSession{
+		ID:              uuid.New(),
+		TenantID:        domain.DefaultTenantID,
+		Subject:         "user-1",
+		AuthenticatedAt: time.Now().UTC().Add(-time.Minute),
+		ExpiresAt:       time.Now().Add(time.Hour),
+	}
+	if err := d.sess.Create(ctx, sess); err != nil {
+		t.Fatalf("Create session: %v", err)
+	}
+
+	rawCode := "auth-code-id-token-refresh"
+	codeVerifier := "pkce-verifier-abcdefghijklmnopqrstuvwxyz0123456789"
+	sum := sha256.Sum256([]byte(codeVerifier))
+	challenge := base64.RawURLEncoding.EncodeToString(sum[:])
+	if err := d.codes.Create(ctx, &domain.AuthorizationCode{
+		CodeHash:            domain.HashAuthorizationCode(rawCode),
+		TenantID:            domain.DefaultTenantID,
+		ClientID:            "app-a",
+		Subject:             "user-1",
+		SessionID:           sess.ID,
+		RedirectURI:         "https://app.example/cb",
+		Scopes:              []string{"openid", "offline_access"},
+		CodeChallenge:       challenge,
+		CodeChallengeMethod: "S256",
+		ExpiresAt:           time.Now().Add(10 * time.Minute),
+		CreatedAt:           time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("Create code: %v", err)
+	}
+
+	tok, err := d.flow.ExchangeCode(ctx, oauth2.ExchangeCodeInput{
+		ClientID:     "app-a",
+		Code:         rawCode,
+		RedirectURI:  "https://app.example/cb",
+		CodeVerifier: codeVerifier,
+	})
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if tok.IDToken == "" {
+		t.Fatal("expected id_token on code exchange")
+	}
+
+	before := d.sess.getCalls
+	refreshed, err := d.flow.RefreshToken(ctx, oauth2.RefreshTokenInput{
+		ClientID:     "app-a",
+		RefreshToken: tok.RefreshToken,
+	})
+	if err != nil {
+		t.Fatalf("RefreshToken: %v", err)
+	}
+	if refreshed.IDToken == "" {
+		t.Fatal("expected id_token on refresh")
+	}
+	if got := d.sess.getCalls - before; got != 1 {
+		t.Fatalf("login session GetByID during refresh = %d, want 1", got)
+	}
+}
+
 func TestRevokeAndIntrospect(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -804,6 +901,228 @@ func TestClientCredentials(t *testing.T) {
 	}
 }
 
+func acceptConsentAfterLogin(t *testing.T, d *testDeps, login *domain.LoginChallenge) *domain.ConsentChallenge {
+	t.Helper()
+	ctx := t.Context()
+	if err := d.login.Create(ctx, login); err != nil {
+		t.Fatalf("Create login: %v", err)
+	}
+	if _, err := d.flow.AcceptLogin(ctx, oauth2.AcceptLoginInput{
+		ChallengeID: login.ID.String(),
+		Subject:     "user-1",
+	}); err != nil {
+		t.Fatalf("AcceptLogin: %v", err)
+	}
+	for _, c := range d.consent.byID {
+		return c
+	}
+	t.Fatal("expected consent challenge")
+	return nil
+}
+
+func TestAcceptConsentEmptyGrantScopeNotFallback(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+	consent := acceptConsentAfterLogin(t, d, sampleLoginChallenge(t))
+
+	// Explicit empty via presence flag: user granted nothing — no fallback.
+	if _, err := d.flow.AcceptConsent(ctx, oauth2.AcceptConsentInput{
+		ChallengeID:   consent.ID.String(),
+		GrantScope:    []string{},
+		GrantScopeSet: true,
+	}); err != nil {
+		t.Fatalf("AcceptConsent empty grant: %v", err)
+	}
+	if len(d.codes.byHash) != 1 {
+		t.Fatalf("codes = %d", len(d.codes.byHash))
+	}
+	for _, c := range d.codes.byHash {
+		if len(c.Scopes) != 0 {
+			t.Fatalf("scopes = %v, want empty (explicit deny-all)", c.Scopes)
+		}
+	}
+}
+
+func TestAcceptConsentNilGrantScopeFallsBackToRequested(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+	consent := acceptConsentAfterLogin(t, d, sampleLoginChallenge(t))
+
+	// Presence flag false (gRPC omit / Hydra-like): default → requested scopes.
+	if _, err := d.flow.AcceptConsent(ctx, oauth2.AcceptConsentInput{
+		ChallengeID:   consent.ID.String(),
+		GrantScope:    nil,
+		GrantScopeSet: false,
+	}); err != nil {
+		t.Fatalf("AcceptConsent unset grant: %v", err)
+	}
+	for _, c := range d.codes.byHash {
+		if len(c.Scopes) != 1 || c.Scopes[0] != "openid" {
+			t.Fatalf("scopes = %v, want [openid]", c.Scopes)
+		}
+	}
+}
+
+func TestAcceptConsentEmptyGrantAudienceNotFallback(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+	login := sampleLoginChallenge(t)
+	login.RequestedAudience = []string{"https://api.example"}
+	consent := acceptConsentAfterLogin(t, d, login)
+
+	if _, err := d.flow.AcceptConsent(ctx, oauth2.AcceptConsentInput{
+		ChallengeID:      consent.ID.String(),
+		GrantScope:       []string{"openid"},
+		GrantScopeSet:    true,
+		GrantAudience:    []string{},
+		GrantAudienceSet: true,
+	}); err != nil {
+		t.Fatalf("AcceptConsent empty audience: %v", err)
+	}
+	for _, c := range d.codes.byHash {
+		if len(c.Audience) != 0 {
+			t.Fatalf("audience = %v, want empty", c.Audience)
+		}
+	}
+}
+
+func TestAcceptConsentNilGrantAudienceFallsBackToRequested(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+	login := sampleLoginChallenge(t)
+	login.RequestedAudience = []string{"https://api.example"}
+	consent := acceptConsentAfterLogin(t, d, login)
+
+	if _, err := d.flow.AcceptConsent(ctx, oauth2.AcceptConsentInput{
+		ChallengeID:      consent.ID.String(),
+		GrantScope:       []string{"openid"},
+		GrantScopeSet:    true,
+		GrantAudience:    nil,
+		GrantAudienceSet: false,
+	}); err != nil {
+		t.Fatalf("AcceptConsent unset audience: %v", err)
+	}
+	for _, c := range d.codes.byHash {
+		if len(c.Audience) != 1 || c.Audience[0] != "https://api.example" {
+			t.Fatalf("audience = %v, want [https://api.example]", c.Audience)
+		}
+	}
+}
+
+func TestAuthorizeInvalidScopeRedirectsToClient(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+
+	_, err := d.flow.Authorize(ctx, oauth2.AuthorizeInput{
+		ClientID:            "app-a",
+		ResponseType:        "code",
+		RedirectURI:         "https://app.example/cb",
+		Scope:               "not-allowed-scope",
+		State:               "st-1",
+		CodeChallenge:       "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+		CodeChallengeMethod: "S256",
+		RequestURL:          "https://auth.example/oauth2/auth",
+	})
+	var cre *oauth2.ClientRedirectError
+	if !errors.As(err, &cre) {
+		t.Fatalf("err=%v, want ClientRedirectError", err)
+	}
+	if !errors.Is(cre.Err, oauth2.ErrInvalidScope) {
+		t.Fatalf("unwrap = %v, want invalid_scope", cre.Err)
+	}
+	if cre.RedirectURI != "https://app.example/cb" || cre.State != "st-1" {
+		t.Fatalf("redirect meta = %+v", cre)
+	}
+
+	loc, err := oauth2.ClientErrorRedirectURL(cre.RedirectURI, cre.State, "invalid_scope", cre.Err.Error(), "")
+	if err != nil {
+		t.Fatalf("ClientErrorRedirectURL: %v", err)
+	}
+	if !strings.Contains(loc, "error=invalid_scope") || !strings.Contains(loc, "state=st-1") {
+		t.Fatalf("redirect URL = %q", loc)
+	}
+}
+
+func TestAuthorizePKCERequiredRedirectsToClient(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+
+	_, err := d.flow.Authorize(ctx, oauth2.AuthorizeInput{
+		ClientID:     "app-a",
+		ResponseType: "code",
+		RedirectURI:  "https://app.example/cb",
+		Scope:        "openid",
+		State:        "st-pkce",
+		// public client + RequirePKCE, but no code_challenge
+		RequestURL: "https://auth.example/oauth2/auth",
+	})
+	var cre *oauth2.ClientRedirectError
+	if !errors.As(err, &cre) {
+		t.Fatalf("err=%v, want ClientRedirectError", err)
+	}
+	if !errors.Is(cre.Err, oauth2.ErrPKCERequired) {
+		t.Fatalf("unwrap = %v, want pkce required", cre.Err)
+	}
+}
+
+func TestAuthorizeInvalidRedirectURINotClientRedirect(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+
+	_, err := d.flow.Authorize(ctx, oauth2.AuthorizeInput{
+		ClientID:     "app-a",
+		ResponseType: "code",
+		RedirectURI:  "https://evil.example/cb",
+		Scope:        "openid",
+	})
+	var cre *oauth2.ClientRedirectError
+	if errors.As(err, &cre) {
+		t.Fatal("invalid redirect_uri must not produce ClientRedirectError")
+	}
+	if !errors.Is(err, oauth2.ErrInvalidRedirectURI) {
+		t.Fatalf("err=%v, want invalid_redirect_uri", err)
+	}
+}
+
+func TestAuthorizeEmptyChallengeMethodAcceptedAsPlain(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+
+	res, err := d.flow.Authorize(ctx, oauth2.AuthorizeInput{
+		ClientID:            "app-a",
+		ResponseType:        "code",
+		RedirectURI:         "https://app.example/cb",
+		Scope:               "openid",
+		State:               "st",
+		CodeChallenge:       "plain-challenge-value",
+		CodeChallengeMethod: "", // RFC 7636 §4.3 default plain
+		RequestURL:          "https://auth.example/oauth2/auth",
+	})
+	if err != nil {
+		t.Fatalf("Authorize with empty method: %v", err)
+	}
+	if !strings.Contains(res.RedirectTo, "login_challenge=") {
+		t.Fatalf("RedirectTo = %q", res.RedirectTo)
+	}
+	for _, ch := range d.login.byID {
+		if ch.CodeChallengeMethod != "" {
+			// empty is fine (stored as omitted); must not be rewritten to S256
+			t.Fatalf("CodeChallengeMethod = %q, want empty (plain default)", ch.CodeChallengeMethod)
+		}
+		if ch.CodeChallenge != "plain-challenge-value" {
+			t.Fatalf("CodeChallenge = %q", ch.CodeChallenge)
+		}
+	}
+}
+
 func TestConsentGrantRememberAndSkip(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -831,10 +1150,11 @@ func TestConsentGrantRememberAndSkip(t *testing.T) {
 		t.Fatal("expected consent challenge")
 	}
 	if _, err := d.flow.AcceptConsent(ctx, oauth2.AcceptConsentInput{
-		ChallengeID: consent.ID.String(),
-		GrantScope:  []string{"openid"},
-		Remember:    true,
-		RememberFor: 3600,
+		ChallengeID:   consent.ID.String(),
+		GrantScope:    []string{"openid"},
+		GrantScopeSet: true,
+		Remember:      true,
+		RememberFor:   3600,
 	}); err != nil {
 		t.Fatalf("AcceptConsent remember: %v", err)
 	}

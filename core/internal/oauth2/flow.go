@@ -154,6 +154,11 @@ func buildClientErrorURL(redirectURI, state, errCode, desc, hint string) (string
 	return u.String(), nil
 }
 
+// ClientErrorRedirectURL builds a client redirect with OAuth error query params.
+func ClientErrorRedirectURL(redirectURI, state, errCode, desc, hint string) (string, error) {
+	return buildClientErrorURL(redirectURI, state, errCode, desc, hint)
+}
+
 func sessionExpiry(remember bool, rememberFor int64, defaultTTL, maxTTL time.Duration) time.Time {
 	now := time.Now().UTC()
 	if !remember {

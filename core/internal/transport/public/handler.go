@@ -58,11 +58,31 @@ func (h *Handler) notImplemented(w http.ResponseWriter, r *http.Request, endpoin
 }
 
 func (h *Handler) writeAuthorizeError(w http.ResponseWriter, err error) {
+	var cre *oauth2.ClientRedirectError
+	if errors.As(err, &cre) && cre.RedirectURI != "" {
+		loc, e := oauth2.ClientErrorRedirectURL(
+			cre.RedirectURI,
+			cre.State,
+			oauthErrorCode(cre.Err),
+			cre.Err.Error(),
+			"",
+		)
+		if e != nil {
+			h.logger.Error("authorize client redirect", "err", e)
+			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "invalid redirect_uri")
+			return
+		}
+		w.Header().Set("Location", loc)
+		w.WriteHeader(http.StatusFound)
+		return
+	}
+
 	switch {
 	case errors.Is(err, oauth2.ErrInvalidRequest),
 		errors.Is(err, oauth2.ErrUnsupportedResponseType),
 		errors.Is(err, oauth2.ErrInvalidScope),
 		errors.Is(err, oauth2.ErrPKCERequired),
+		errors.Is(err, oauth2.ErrUnauthorizedClient),
 		errors.Is(err, oauth2.ErrInvalidRedirectURI):
 		writeOAuthError(w, http.StatusBadRequest, oauthErrorCode(err), err.Error())
 	case errors.Is(err, oauth2.ErrInvalidClient):
@@ -84,6 +104,10 @@ func oauthErrorCode(err error) string {
 		return "invalid_scope"
 	case errors.Is(err, oauth2.ErrInvalidClient):
 		return "invalid_client"
+	case errors.Is(err, oauth2.ErrUnauthorizedClient):
+		return "unauthorized_client"
+	case errors.Is(err, oauth2.ErrPKCERequired):
+		return "invalid_request"
 	default:
 		return "invalid_request"
 	}

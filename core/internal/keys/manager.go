@@ -33,6 +33,8 @@ type Manager struct {
 	kid        string
 	algorithm  string
 	static     bool
+	// jwksCache is rebuilt only when signing material changes (load/rotate).
+	jwksCache *JWKSet
 }
 
 // NewManager loads a static PEM key or ensures an auto-generated key in Postgres.
@@ -97,38 +99,63 @@ func (m *Manager) SignJWT(claims jwt.MapClaims) (string, error) {
 }
 
 // JWKS returns the public JWKS for the active key set.
+// Results are cached in memory until signing keys are reloaded.
 func (m *Manager) JWKS(ctx context.Context) (*JWKSet, error) {
 	m.mu.RLock()
+	if m.jwksCache != nil {
+		out := cloneJWKSet(m.jwksCache)
+		m.mu.RUnlock()
+		return out, nil
+	}
 	static := m.static
 	kid := m.kid
 	alg := m.algorithm
 	priv := m.privateKey
 	m.mu.RUnlock()
 
+	var set *JWKSet
 	if static || m.repo == nil {
 		if priv == nil {
 			return nil, fmt.Errorf("signing key not loaded")
 		}
-		return &JWKSet{Keys: []JWK{rsaPublicToJWK(&priv.PublicKey, kid, alg)}}, nil
-	}
-
-	stored, err := m.repo.ListActiveKeys(ctx, domain.DefaultTenantID)
-	if err != nil {
-		return nil, err
-	}
-	if len(stored) == 0 {
-		// Fallback to in-memory active key.
-		return &JWKSet{Keys: []JWK{rsaPublicToJWK(&priv.PublicKey, kid, alg)}}, nil
-	}
-	out := make([]JWK, 0, len(stored))
-	for _, k := range stored {
-		jwk, err := publicPEMToJWK(k.PublicKey, k.KID, k.Algorithm)
+		set = &JWKSet{Keys: []JWK{rsaPublicToJWK(&priv.PublicKey, kid, alg)}}
+	} else {
+		stored, err := m.repo.ListActiveKeys(ctx, domain.DefaultTenantID)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, jwk)
+		if len(stored) == 0 {
+			// Fallback to in-memory active key.
+			set = &JWKSet{Keys: []JWK{rsaPublicToJWK(&priv.PublicKey, kid, alg)}}
+		} else {
+			out := make([]JWK, 0, len(stored))
+			for _, k := range stored {
+				jwk, err := publicPEMToJWK(k.PublicKey, k.KID, k.Algorithm)
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, jwk)
+			}
+			set = &JWKSet{Keys: out}
+		}
 	}
-	return &JWKSet{Keys: out}, nil
+
+	m.mu.Lock()
+	if m.jwksCache == nil {
+		m.jwksCache = set
+	}
+	out := cloneJWKSet(m.jwksCache)
+	m.mu.Unlock()
+	return out, nil
+}
+
+func cloneJWKSet(in *JWKSet) *JWKSet {
+	if in == nil {
+		return nil
+	}
+	keys := make([]JWK, len(in.Keys))
+	copy(keys, in.Keys)
+	return &JWKSet{Keys: keys}
 }
 
 func (m *Manager) loadStatic() error {
@@ -149,6 +176,7 @@ func (m *Manager) loadStatic() error {
 	m.privateKey = priv
 	m.kid = kid
 	m.static = true
+	m.jwksCache = nil
 	return nil
 }
 
@@ -244,5 +272,6 @@ func (m *Manager) loadFromRecord(rec *domain.SigningKey, enc Encryptor) error {
 	m.kid = rec.KID
 	m.algorithm = rec.Algorithm
 	m.static = false
+	m.jwksCache = nil
 	return nil
 }
