@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,6 +29,10 @@ type AuthorizeInput struct {
 	ACRValues string
 	UILocales string
 	Display   string
+	// Prompt is the raw OIDC prompt query (space-separated).
+	Prompt string
+	// MaxAge is the raw OIDC max_age query (seconds); empty = omitted.
+	MaxAge string
 	// ExistingSessionID from SSO cookie (may be empty / invalid).
 	ExistingSessionID string
 	// DeviceID from browser device cookie (granto_did); stored on LoginChallenge.
@@ -91,28 +96,62 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 		}
 	}
 
+	prompt, err := parsePrompt(in.Prompt)
+	if err != nil {
+		return nil, toClient(err)
+	}
+	maxAge, maxAgeSet, err := parseMaxAge(in.MaxAge)
+	if err != nil {
+		return nil, toClient(err)
+	}
+
+	var maxAgePtr *int64
+	if maxAgeSet {
+		v := maxAge
+		maxAgePtr = &v
+	}
 	oidcCtx := domain.OIDCContext{
-		LoginHint: in.LoginHint,
-		Display:   in.Display,
-		ACRValues: parseSpaceList(in.ACRValues),
-		UILocales: parseSpaceList(in.UILocales),
+		LoginHint:     in.LoginHint,
+		Display:       in.Display,
+		ACRValues:     parseSpaceList(in.ACRValues),
+		UILocales:     parseSpaceList(in.UILocales),
+		Prompt:        prompt,
+		MaxAgeSeconds: maxAgePtr,
 	}
 
 	now := time.Now().UTC()
 	var sessionID uuid.UUID
 	var subject string
+	var sess *domain.LoginSession
 	skipLogin := false
 
 	if sid, err := uuid.Parse(strings.TrimSpace(in.ExistingSessionID)); err == nil && sid != uuid.Nil {
-		if sess, err := f.loginSessions.GetByID(ctx, sid); err == nil && !sess.IsExpired() && sess.TenantID == f.tenantID() {
-			sessionID = sess.ID
-			subject = sess.Subject
-			skipLogin = true
+		if s, err := f.loginSessions.GetByID(ctx, sid); err == nil && !s.IsExpired() && s.TenantID == f.tenantID() {
+			sess = s
 		}
 	}
 
+	forceLogin := promptHas(prompt, "login") || promptHas(prompt, "select_account")
+	if sess != nil && maxAgeSet && sessionExceedsMaxAge(sess, maxAge, now) {
+		if promptHas(prompt, "none") {
+			return nil, toClient(fmt.Errorf("%w: authentication time exceeds max_age", ErrLoginRequired))
+		}
+		forceLogin = true
+	}
+
+	if sess != nil && !forceLogin {
+		sessionID = sess.ID
+		subject = sess.Subject
+		skipLogin = true
+	}
+
 	if skipLogin {
-		if f.canSkipConsentUI(ctx, client, subject, scopes, nil) {
+		forceConsent := promptHas(prompt, "consent")
+		canSkip := !forceConsent && f.canSkipConsentUI(ctx, client, subject, scopes, nil)
+		if !canSkip && promptHas(prompt, "none") {
+			return nil, toClient(fmt.Errorf("%w: consent is required", ErrConsentRequired))
+		}
+		if canSkip {
 			redirect, err := f.issueConsentCodeAndVerifier(ctx, consentIssueParams{
 				TenantID:            f.tenantID(),
 				ClientID:            client.ClientID,
@@ -158,6 +197,10 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 		return &AuthorizeResult{RedirectTo: redirect}, nil
 	}
 
+	if promptHas(prompt, "none") {
+		return nil, toClient(fmt.Errorf("%w: no existing login session", ErrLoginRequired))
+	}
+
 	ch := &domain.LoginChallenge{
 		TenantID:            f.tenantID(),
 		ClientID:            client.ClientID,
@@ -169,7 +212,7 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 		Nonce:               in.Nonce,
 		CodeChallenge:       in.CodeChallenge,
 		CodeChallengeMethod: in.CodeChallengeMethod,
-		SessionID:           sessionID,
+		SessionID:           uuid.Nil, // force re-auth; do not skip via old session
 		Skip:                false,
 		DeviceID:            strings.TrimSpace(in.DeviceID),
 		OIDCContext:         oidcCtx,
@@ -220,4 +263,55 @@ func validateCodeChallengeMethod(method string) error {
 	default:
 		return fmt.Errorf("%w: unsupported code_challenge_method", ErrInvalidRequest)
 	}
+}
+
+func parsePrompt(raw string) ([]string, error) {
+	parts := parseSpaceList(raw)
+	if len(parts) == 0 {
+		return nil, nil
+	}
+	hasNone := false
+	for _, p := range parts {
+		switch p {
+		case "none":
+			hasNone = true
+		case "login", "consent", "select_account":
+			// ok
+		default:
+			return nil, fmt.Errorf("%w: unsupported prompt value %q", ErrInvalidRequest, p)
+		}
+	}
+	if hasNone && len(parts) > 1 {
+		return nil, fmt.Errorf("%w: prompt none cannot be combined with other values", ErrInvalidRequest)
+	}
+	return parts, nil
+}
+
+func parseMaxAge(raw string) (seconds int64, set bool, err error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, false, nil
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || v < 0 {
+		return 0, false, fmt.Errorf("%w: max_age must be a non-negative integer", ErrInvalidRequest)
+	}
+	return v, true, nil
+}
+
+func promptHas(prompt []string, value string) bool {
+	for _, p := range prompt {
+		if p == value {
+			return true
+		}
+	}
+	return false
+}
+
+func sessionExceedsMaxAge(sess *domain.LoginSession, maxAge int64, now time.Time) bool {
+	if sess == nil {
+		return true
+	}
+	deadline := sess.AuthenticatedAt.UTC().Add(time.Duration(maxAge) * time.Second)
+	return !deadline.After(now.UTC())
 }

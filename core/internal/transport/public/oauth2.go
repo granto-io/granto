@@ -42,6 +42,8 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		ACRValues:           q.Get("acr_values"),
 		UILocales:           q.Get("ui_locales"),
 		Display:             q.Get("display"),
+		Prompt:              q.Get("prompt"),
+		MaxAge:              q.Get("max_age"),
 		DeviceID:            h.ensureDeviceCookie(w, r),
 		RequestURL:          h.authorizeRequestURL(r),
 	}

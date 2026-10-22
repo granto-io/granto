@@ -7,4 +7,8 @@ type OIDCContext struct {
 	Display           string         `json:"display,omitempty"`
 	LoginHint         string         `json:"login_hint,omitempty"`
 	IDTokenHintClaims map[string]any `json:"id_token_hint_claims,omitempty"`
+	// Prompt is the space-split OIDC prompt parameter (none, login, consent, …).
+	Prompt []string `json:"prompt,omitempty"`
+	// MaxAgeSeconds is OIDC max_age when set (nil = omitted).
+	MaxAgeSeconds *int64 `json:"max_age,omitempty"`
 }
