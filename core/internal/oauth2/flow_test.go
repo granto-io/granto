@@ -184,10 +184,10 @@ func (m *memSessions) ListBySubject(_ context.Context, _ uuid.UUID, subject stri
 	return out, nil
 }
 
-func (m *memSessions) ListByDeviceID(_ context.Context, _ uuid.UUID, deviceID string) ([]*domain.LoginSession, error) {
+func (m *memSessions) ListByDeviceID(_ context.Context, _ uuid.UUID, deviceID, subject string) ([]*domain.LoginSession, error) {
 	var out []*domain.LoginSession
 	for _, s := range m.byID {
-		if s.DeviceID == deviceID {
+		if s.DeviceID == deviceID && s.Subject == subject {
 			cp := *s
 			out = append(out, &cp)
 		}
