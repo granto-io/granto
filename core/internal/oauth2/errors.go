@@ -22,6 +22,9 @@ var (
 	ErrSessionExpired          = errors.New("session expired")
 	ErrInvalidToken            = errors.New("invalid token")
 	ErrInsufficientScope       = errors.New("insufficient scope")
+	// OIDC prompt=none failures (redirect to client with these error codes).
+	ErrLoginRequired   = errors.New("login_required")
+	ErrConsentRequired = errors.New("consent_required")
 )
 
 // ClientRedirectError is an authorize error that must be returned to the client

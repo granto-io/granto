@@ -83,7 +83,9 @@ func (h *Handler) writeAuthorizeError(w http.ResponseWriter, err error) {
 		errors.Is(err, oauth2.ErrInvalidScope),
 		errors.Is(err, oauth2.ErrPKCERequired),
 		errors.Is(err, oauth2.ErrUnauthorizedClient),
-		errors.Is(err, oauth2.ErrInvalidRedirectURI):
+		errors.Is(err, oauth2.ErrInvalidRedirectURI),
+		errors.Is(err, oauth2.ErrLoginRequired),
+		errors.Is(err, oauth2.ErrConsentRequired):
 		writeOAuthError(w, http.StatusBadRequest, oauthErrorCode(err), err.Error())
 	case errors.Is(err, oauth2.ErrInvalidClient):
 		writeOAuthError(w, http.StatusBadRequest, "invalid_client", err.Error())
@@ -106,6 +108,10 @@ func oauthErrorCode(err error) string {
 		return "invalid_client"
 	case errors.Is(err, oauth2.ErrUnauthorizedClient):
 		return "unauthorized_client"
+	case errors.Is(err, oauth2.ErrLoginRequired):
+		return "login_required"
+	case errors.Is(err, oauth2.ErrConsentRequired):
+		return "consent_required"
 	case errors.Is(err, oauth2.ErrPKCERequired):
 		return "invalid_request"
 	default:
