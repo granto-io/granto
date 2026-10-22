@@ -218,6 +218,45 @@ func TestApplyClientBody_InvalidType(t *testing.T) {
 	}
 }
 
+func TestApplyClientBody_RejectsSSRFLogoutURIs(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		req  *adminv1.CreateClientRequest
+	}{
+		{
+			name: "backchannel metadata IP",
+			req: &adminv1.CreateClientRequest{
+				Name:                 "x",
+				BackchannelLogoutUri: "https://169.254.169.254/latest/meta-data",
+			},
+		},
+		{
+			name: "backchannel http",
+			req: &adminv1.CreateClientRequest{
+				Name:                 "x",
+				BackchannelLogoutUri: "http://rp.example/logout",
+			},
+		},
+		{
+			name: "frontchannel private IP",
+			req: &adminv1.CreateClientRequest{
+				Name:                  "x",
+				FrontchannelLogoutUri: "https://10.0.0.5/front-logout",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := applyClientBody(&domain.Client{}, tc.req)
+			if err == nil {
+				t.Fatal("want validation error")
+			}
+		})
+	}
+}
+
 func TestClientToProtoRoundTripBasics(t *testing.T) {
 	t.Parallel()
 	ttl := time.Hour
