@@ -118,15 +118,19 @@ func (s *OAuth2Server) AcceptConsentRequest(ctx context.Context, req *adminv1.Ac
 		idTok = structToMap(sess.GetIdToken())
 	}
 	redirect, err := s.flow.AcceptConsent(ctx, oauth2.AcceptConsentInput{
-		ChallengeID:    req.GetConsentChallenge(),
-		GrantScope:     body.GetGrantScope(),
-		GrantAudience:  body.GetGrantAccessTokenAudience(),
-		Remember:       body.GetRemember(),
-		RememberFor:    body.GetRememberFor(),
-		SessionAccess:  access,
-		SessionIDToken: idTok,
-		Context:        structToMap(body.GetContext()),
-		AcceptToken:    body.GetAcceptToken(),
+		ChallengeID: req.GetConsentChallenge(),
+		GrantScope:  body.GetGrantScope(),
+		// Flag OR non-nil slice: REST/JSON "grant_scope":[] yields a non-nil
+		// empty slice; native gRPC needs grant_scope_set for the same meaning.
+		GrantScopeSet:    body.GetGrantScopeSet() || body.GrantScope != nil,
+		GrantAudience:    body.GetGrantAccessTokenAudience(),
+		GrantAudienceSet: body.GetGrantAccessTokenAudienceSet() || body.GrantAccessTokenAudience != nil,
+		Remember:         body.GetRemember(),
+		RememberFor:      body.GetRememberFor(),
+		SessionAccess:    access,
+		SessionIDToken:   idTok,
+		Context:          structToMap(body.GetContext()),
+		AcceptToken:      body.GetAcceptToken(),
 	})
 	if err != nil {
 		return nil, oauth2ErrToStatus(err)

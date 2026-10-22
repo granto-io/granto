@@ -17,15 +17,21 @@ type ConsentRequest struct {
 
 // AcceptConsentInput is the Admin AcceptConsent payload.
 type AcceptConsentInput struct {
-	ChallengeID    string
-	GrantScope     []string
-	GrantAudience  []string
-	Remember       bool
-	RememberFor    int64
-	SessionAccess  map[string]any
-	SessionIDToken map[string]any
-	Context        map[string]any
-	AcceptToken    string
+	ChallengeID string
+	// GrantScope is used when GrantScopeSet is true (including empty = deny all).
+	// When GrantScopeSet is false, defaults to the challenge's requested scopes.
+	GrantScope    []string
+	GrantScopeSet bool
+	// GrantAudience is used when GrantAudienceSet is true (including empty).
+	// When GrantAudienceSet is false, defaults to the challenge's requested audience.
+	GrantAudience    []string
+	GrantAudienceSet bool
+	Remember         bool
+	RememberFor      int64
+	SessionAccess    map[string]any
+	SessionIDToken   map[string]any
+	Context          map[string]any
+	AcceptToken      string
 }
 
 // GetConsent loads a consent challenge (includes accept_token).
@@ -54,12 +60,15 @@ func (f *Flow) AcceptConsent(ctx context.Context, in AcceptConsentInput) (redire
 		return "", mapChallengeErr(err)
 	}
 
+	// Presence flags (proto grant_*_set): required for native gRPC to express
+	// an explicit empty grant. REST/JSON may also set them; transport ORs in
+	// non-nil empty slices from JSON unmarshal.
 	scopes := in.GrantScope
-	if len(scopes) == 0 {
+	if !in.GrantScopeSet {
 		scopes = ch.RequestedScopes
 	}
 	audience := in.GrantAudience
-	if len(audience) == 0 {
+	if !in.GrantAudienceSet {
 		audience = ch.RequestedAudience
 	}
 

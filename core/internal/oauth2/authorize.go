@@ -45,9 +45,6 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 	if strings.TrimSpace(in.ClientID) == "" || strings.TrimSpace(in.RedirectURI) == "" {
 		return nil, fmt.Errorf("%w: client_id and redirect_uri are required", ErrInvalidRequest)
 	}
-	if in.ResponseType != "code" {
-		return nil, ErrUnsupportedResponseType
-	}
 
 	client, err := f.clients.GetByClientID(ctx, f.tenantID(), in.ClientID)
 	if err != nil {
@@ -56,11 +53,19 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 		}
 		return nil, err
 	}
-	if !client.HasGrantType(domain.GrantTypeAuthorizationCode) {
-		return nil, ErrUnsupportedResponseType
-	}
+	// Validate redirect_uri before any client-redirectable error (RFC 6749 §4.1.2.1).
 	if !client.HasRedirectURI(in.RedirectURI) {
 		return nil, ErrInvalidRedirectURI
+	}
+	toClient := func(err error) error {
+		return clientRedirect(err, in.RedirectURI, in.State)
+	}
+
+	if in.ResponseType != "code" {
+		return nil, toClient(ErrUnsupportedResponseType)
+	}
+	if !client.HasGrantType(domain.GrantTypeAuthorizationCode) {
+		return nil, toClient(ErrUnauthorizedClient)
 	}
 
 	scopes := parseSpaceList(in.Scope)
@@ -69,18 +74,18 @@ func (f *Flow) Authorize(ctx context.Context, in AuthorizeInput) (*AuthorizeResu
 	}
 	for _, scope := range scopes {
 		if !client.HasScope(scope) {
-			return nil, fmt.Errorf("%w: %s", ErrInvalidScope, scope)
+			return nil, toClient(fmt.Errorf("%w: %s", ErrInvalidScope, scope))
 		}
 	}
 
 	if client.IsPublic() || client.RequirePKCE {
 		if in.CodeChallenge == "" {
-			return nil, ErrPKCERequired
+			return nil, toClient(ErrPKCERequired)
 		}
 	}
 	if in.CodeChallenge != "" {
 		if err := validateCodeChallengeMethod(in.CodeChallengeMethod); err != nil {
-			return nil, err
+			return nil, toClient(err)
 		}
 	}
 

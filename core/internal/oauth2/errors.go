@@ -21,3 +21,33 @@ var (
 	ErrTokenNotFound           = errors.New("token not found")
 	ErrSessionExpired          = errors.New("session expired")
 )
+
+// ClientRedirectError is an authorize error that must be returned to the client
+// via redirect to a previously validated redirect_uri (RFC 6749 §4.1.2.1).
+// Do not use for invalid client_id / redirect_uri — those must not redirect.
+type ClientRedirectError struct {
+	Err         error
+	RedirectURI string
+	State       string
+}
+
+func (e *ClientRedirectError) Error() string {
+	if e == nil || e.Err == nil {
+		return "authorize redirect error"
+	}
+	return e.Err.Error()
+}
+
+func (e *ClientRedirectError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+func clientRedirect(err error, redirectURI, state string) error {
+	if err == nil {
+		return nil
+	}
+	return &ClientRedirectError{Err: err, RedirectURI: redirectURI, State: state}
+}

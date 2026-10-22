@@ -51,6 +51,25 @@ one-time secret bound to the challenge:
 
 Enable only after your consent/login apps send the token.
 
+## AcceptConsent: grant_scope / audience presence
+
+`grant_scope` and `grant_access_token_audience` are `repeated` fields. In
+**proto3 binary gRPC** an omitted list and an empty list are indistinguishable
+on the wire. Granto therefore adds explicit presence flags:
+
+| Field | Meaning when `*_set` is false/omitted | When `*_set` is true |
+|-------|----------------------------------------|----------------------|
+| `grant_scope` + `grant_scope_set` | Use challenge `requested_scope` (Hydra-like) | Use `grant_scope` as-is, including `[]` (deny all) |
+| `grant_access_token_audience` + `grant_access_token_audience_set` | Use challenge requested audience | Use list as-is, including empty |
+
+**Native gRPC** consent apps that need “user unchecked all scopes” **must** set
+`grant_scope_set: true` (and the same for audience if applicable) with an empty
+repeated field.
+
+**REST/JSON** via grpc-gateway: sending `"grant_scope": []` still works without
+the flag (JSON unmarshal yields a non-nil empty slice). Setting the flag is
+recommended for clarity and for clients that also speak gRPC.
+
 ## Honest differences from Hydra
 
 | Topic | Hydra (typical) | Granto |
@@ -59,6 +78,7 @@ Enable only after your consent/login apps send the token.
 | Accept proof | Challenge + Admin auth | Same in **default**; optional **strict** + `accept_token` |
 | Paths | `/admin/oauth2/auth/requests/...` | Same Hydra-like paths |
 | Public authorize/token | OAuth/OIDC RFCs | Same idea; Granto public surface is RFC-only |
+| Empty `grant_scope` over gRPC | N/A (Hydra Admin is HTTP) | Requires `grant_scope_set` (proto3) |
 
 Granto does **not** promise bit-identical Hydra challenge encoding or every
 Hydra extension field. Path and Accept semantics in default mode are intended
