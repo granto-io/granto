@@ -297,10 +297,33 @@ func (m *memClients) GetByID(_ context.Context, tenantID, id uuid.UUID) (*domain
 func (m *memClients) List(context.Context, uuid.UUID, repository.ClientFilter) ([]*domain.Client, error) {
 	return nil, nil
 }
-func (m *memClients) Create(context.Context, *domain.Client) error { return nil }
-func (m *memClients) Update(context.Context, *domain.Client) error { return nil }
-func (m *memClients) Delete(context.Context, uuid.UUID, uuid.UUID) error {
+func (m *memClients) Create(_ context.Context, c *domain.Client) error {
+	if m.byID == nil {
+		m.byID = map[string]*domain.Client{}
+	}
+	cp := *c
+	m.byID[c.ClientID] = &cp
 	return nil
+}
+func (m *memClients) Update(_ context.Context, c *domain.Client) error {
+	if m.byID == nil {
+		return domain.ErrClientNotFound
+	}
+	if _, ok := m.byID[c.ClientID]; !ok {
+		return domain.ErrClientNotFound
+	}
+	cp := *c
+	m.byID[c.ClientID] = &cp
+	return nil
+}
+func (m *memClients) Delete(_ context.Context, tenantID, id uuid.UUID) error {
+	for cid, c := range m.byID {
+		if c.ID == id && c.TenantID == tenantID {
+			delete(m.byID, cid)
+			return nil
+		}
+	}
+	return domain.ErrClientNotFound
 }
 
 type memGrants struct {
