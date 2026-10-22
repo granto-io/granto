@@ -53,6 +53,37 @@ func sessionClientsKey(tenantID, sessionID uuid.UUID) string {
 	return tenantID.String() + ":session_clients:" + sessionID.String()
 }
 
+// trackSessionClient records clientID for front/back-channel logout.
+// TTL is never shortened: a short-lived access token must not erase a
+// refresh-token-length index (or logout notifications vanish after ~AT TTL).
+func (r *TokenRepository) trackSessionClient(ctx context.Context, tenantID, sessionID uuid.UUID, clientID string, ttl time.Duration) error {
+	if sessionID == uuid.Nil || clientID == "" || ttl <= 0 {
+		return nil
+	}
+	key := sessionClientsKey(tenantID, sessionID)
+	if err := r.rdb.SAdd(ctx, key, clientID).Err(); err != nil {
+		return fmt.Errorf("sadd session clients: %w", err)
+	}
+	return r.extendKeyTTL(ctx, key, ttl)
+}
+
+// extendKeyTTL sets or lengthens key expiry to at least ttl; never shortens.
+func (r *TokenRepository) extendKeyTTL(ctx context.Context, key string, ttl time.Duration) error {
+	// go-redis PTTL returns a time.Duration (already converted from ms).
+	pttl, err := r.rdb.PTTL(ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("pttl %s: %w", key, err)
+	}
+	// pttl < 0: key exists without expiry (-1) or missing (-2); set ttl.
+	if pttl >= 0 && pttl >= ttl {
+		return nil
+	}
+	if err := r.rdb.Expire(ctx, key, ttl).Err(); err != nil {
+		return fmt.Errorf("expire %s: %w", key, err)
+	}
+	return nil
+}
+
 func (r *TokenRepository) CreateAccessToken(ctx context.Context, t *domain.AccessToken) error {
 	if t == nil {
 		return fmt.Errorf("access token is nil")
@@ -83,13 +114,11 @@ func (r *TokenRepository) CreateAccessToken(ctx context.Context, t *domain.Acces
 	pipe := r.rdb.Pipeline()
 	pipe.Set(ctx, accessTokenKey(t.TenantID, t.TokenHash), data, ttl)
 	pipe.Set(ctx, accessTokenJTIKey(t.TenantID, t.JTI), jtiVal, ttl)
-	if t.SessionID != uuid.Nil && t.ClientID != "" {
-		sk := sessionClientsKey(t.TenantID, t.SessionID)
-		pipe.SAdd(ctx, sk, t.ClientID)
-		pipe.Expire(ctx, sk, ttl)
-	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("store access token: %w", err)
+	}
+	if err := r.trackSessionClient(ctx, t.TenantID, t.SessionID, t.ClientID, ttl); err != nil {
+		return err
 	}
 	return nil
 }
@@ -188,14 +217,12 @@ func (r *TokenRepository) CreateRefreshToken(ctx context.Context, t *domain.Refr
 		sk := sessionRefreshKey(t.TenantID, t.SessionID)
 		pipe.SAdd(ctx, sk, t.TokenHash)
 		pipe.Expire(ctx, sk, ttl)
-		if t.ClientID != "" {
-			ck := sessionClientsKey(t.TenantID, t.SessionID)
-			pipe.SAdd(ctx, ck, t.ClientID)
-			pipe.Expire(ctx, ck, ttl)
-		}
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("store refresh token: %w", err)
+	}
+	if err := r.trackSessionClient(ctx, t.TenantID, t.SessionID, t.ClientID, ttl); err != nil {
+		return err
 	}
 	return nil
 }
@@ -262,14 +289,12 @@ func (r *TokenRepository) RotateRefreshToken(ctx context.Context, tenantID uuid.
 		sk := sessionRefreshKey(tenantID, next.SessionID)
 		pipe.SAdd(ctx, sk, next.TokenHash)
 		pipe.Expire(ctx, sk, ttl)
-		if next.ClientID != "" {
-			ck := sessionClientsKey(tenantID, next.SessionID)
-			pipe.SAdd(ctx, ck, next.ClientID)
-			pipe.Expire(ctx, ck, ttl)
-		}
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("rotate refresh token: %w", err)
+	}
+	if err := r.trackSessionClient(ctx, tenantID, next.SessionID, next.ClientID, ttl); err != nil {
+		return err
 	}
 	return nil
 }
