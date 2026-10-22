@@ -143,8 +143,13 @@ func claimUnix(v any) (int64, bool) {
 	}
 }
 
+// LogoutTokenTTL is how long a back-channel logout_token remains valid.
+// Short-lived: one POST delivery window (OIDC Back-Channel Logout requires exp).
+const LogoutTokenTTL = 2 * time.Minute
+
 // IssueLogoutToken mints an OIDC Back-Channel Logout Token (JWT) for the RP.
 // Spec: https://openid.net/specs/openid-connect-backchannel-1_0.html
+// Required claims include iss, aud, iat, exp, jti, events; MUST NOT contain nonce.
 func (s *IDTokens) IssueLogoutToken(_ context.Context, clientID, subject string, sessionID uuid.UUID) (string, error) {
 	if s == nil || s.keys == nil {
 		return "", fmt.Errorf("id token signer not configured")
@@ -163,6 +168,7 @@ func (s *IDTokens) IssueLogoutToken(_ context.Context, clientID, subject string,
 		"iss": strings.TrimRight(s.cfg.Token.Issuer, "/"),
 		"aud": clientID,
 		"iat": now.Unix(),
+		"exp": now.Add(LogoutTokenTTL).Unix(),
 		"jti": uuid.NewString(),
 		"events": map[string]any{
 			"http://schemas.openid.net/event/backchannel-logout": map[string]any{},

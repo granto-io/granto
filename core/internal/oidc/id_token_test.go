@@ -152,6 +152,14 @@ func TestIssueLogoutToken(t *testing.T) {
 	if claims["nonce"] != nil {
 		t.Fatal("logout_token must not contain nonce")
 	}
+	iat, _ := claims["iat"].(float64)
+	exp, ok := claims["exp"].(float64)
+	if !ok || exp <= iat {
+		t.Fatalf("exp required and after iat: iat=%v exp=%v", claims["iat"], claims["exp"])
+	}
+	if got := time.Unix(int64(exp), 0).Sub(time.Unix(int64(iat), 0)); got != oidc.LogoutTokenTTL {
+		t.Fatalf("exp-iat = %v, want %v", got, oidc.LogoutTokenTTL)
+	}
 	events, ok := claims["events"].(map[string]any)
 	if !ok {
 		t.Fatalf("events claim missing: %#v", claims["events"])
