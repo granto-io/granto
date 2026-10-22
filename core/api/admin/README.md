@@ -60,7 +60,7 @@ Login sessions (SSO cookie / OIDC `sid`):
 | DELETE | `/admin/v1/login-sessions/{id}` |
 | DELETE | `/admin/oauth2/auth/sessions/login?sid=` **or** `?subject=` (Hydra-compatible; exactly one) |
 
-Delete / revoke also **revokes refresh tokens** bound to the deleted session(s) and sends **back-channel logout** (`logout_token` POST) to RPs that registered `backchannel_logout_uri` and received tokens for that session. Front-channel (browser iframes) runs on public `/oauth2/logout` only.
+Delete / revoke **first revokes refresh tokens** bound to the session, then deletes the LoginSession (so a revoke failure does not leave orphan RTs without a session). Also sends **back-channel logout** (`logout_token` POST) to RPs that registered `backchannel_logout_uri` and received tokens for that session. Front-channel (browser iframes) runs on public `/oauth2/logout` only.
 
 Remembered consent grants (`ConsentGrant`):
 

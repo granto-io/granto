@@ -2,6 +2,7 @@ package oauth2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -53,7 +54,8 @@ func (f *Flow) Logout(ctx context.Context, in LogoutInput) (*LogoutResult, error
 	f.dispatchBackChannelLogout(tasks)
 
 	for _, t := range targets {
-		f.deleteOneLoginSession(ctx, t.ID)
+		// Best-effort: if revoke fails, session is kept (no orphan refresh tokens).
+		_ = f.deleteOneLoginSession(ctx, t.ID)
 	}
 
 	out := &LogoutResult{
@@ -184,11 +186,22 @@ func (f *Flow) logoutTargetsByDevice(ctx context.Context, in LogoutInput) []logo
 	return out
 }
 
-func (f *Flow) deleteOneLoginSession(ctx context.Context, sessionID uuid.UUID) {
-	_ = f.loginSessions.Delete(ctx, sessionID)
+// deleteOneLoginSession revokes refresh tokens for the session, then deletes
+// the LoginSession. Order matters: never drop the session while RT may still
+// be valid. If revoke fails, the session is left intact.
+func (f *Flow) deleteOneLoginSession(ctx context.Context, sessionID uuid.UUID) error {
 	if f.tokens != nil {
-		_ = f.tokens.RevokeRefreshTokensBySession(ctx, f.tenantID(), sessionID)
+		if err := f.tokens.RevokeRefreshTokensBySession(ctx, f.tenantID(), sessionID); err != nil {
+			return fmt.Errorf("revoke refresh tokens: %w", err)
+		}
 	}
+	if err := f.loginSessions.Delete(ctx, sessionID); err != nil {
+		if errors.Is(err, domain.ErrLoginSessionNotFound) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (f *Flow) loadLogoutSession(ctx context.Context, in LogoutInput) *domain.LoginSession {

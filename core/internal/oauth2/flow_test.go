@@ -425,6 +425,8 @@ type memTokens struct {
 	at             map[string]*domain.AccessToken
 	rt             map[string]*domain.RefreshToken
 	sessionClients map[uuid.UUID]map[string]struct{}
+	// revokeSessionErr if set is returned by RevokeRefreshTokensBySession (tests).
+	revokeSessionErr error
 }
 
 func (m *memTokens) trackSessionClient(sessionID uuid.UUID, clientID string) {
@@ -513,6 +515,9 @@ func (m *memTokens) RevokeRefreshToken(_ context.Context, _ uuid.UUID, hash stri
 	return nil
 }
 func (m *memTokens) RevokeRefreshTokensBySession(_ context.Context, _ uuid.UUID, sessionID uuid.UUID) error {
+	if m.revokeSessionErr != nil {
+		return m.revokeSessionErr
+	}
 	for h, t := range m.rt {
 		if t.SessionID == sessionID {
 			delete(m.rt, h)

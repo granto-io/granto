@@ -73,6 +73,40 @@ func TestAdminGetListDeleteLoginSession(t *testing.T) {
 	}
 }
 
+func TestDeleteLoginSessionKeepsSessionWhenRevokeFails(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+
+	sess := &domain.LoginSession{
+		ID: uuid.New(), TenantID: domain.DefaultTenantID, Subject: "user-1",
+		AuthenticatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := d.sess.Create(ctx, sess); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	rtHash := domain.HashToken("rt-keep-on-fail")
+	if err := d.tokens.CreateRefreshToken(ctx, &domain.RefreshToken{
+		TokenHash: rtHash, JTI: uuid.NewString(), TenantID: domain.DefaultTenantID,
+		ClientID: "app-a", Subject: "user-1", SessionID: sess.ID,
+		Scopes: []string{"openid"}, IssuedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("CreateRefreshToken: %v", err)
+	}
+
+	d.tokens.revokeSessionErr = errors.New("redis unavailable")
+	err := d.flow.DeleteLoginSession(ctx, sess.ID.String())
+	if err == nil {
+		t.Fatal("DeleteLoginSession: want revoke error")
+	}
+	if _, err := d.sess.GetByID(ctx, sess.ID); err != nil {
+		t.Fatalf("session must remain when revoke fails: %v", err)
+	}
+	if _, err := d.tokens.GetRefreshToken(ctx, domain.DefaultTenantID, rtHash); err != nil {
+		t.Fatalf("refresh must remain when revoke fails: %v", err)
+	}
+}
+
 func TestAdminDeleteLoginSessionsBySubject(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
