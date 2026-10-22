@@ -2,6 +2,7 @@ package admin
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ import (
 
 	adminv1 "github.com/granto-io/granto/core/gen/admin/v1"
 	"github.com/granto-io/granto/core/internal/domain"
+	"github.com/granto-io/granto/core/internal/netutil"
 )
 
 // clientBody is the shared writable surface of CreateClientRequest and UpdateClientRequest.
@@ -94,10 +96,16 @@ func applyClientBody(c *domain.Client, in clientBody) error {
 	}
 
 	c.PostLogoutURIs = in.GetPostLogoutUris()
-	c.FrontChannelLogoutURI = in.GetFrontchannelLogoutUri()
+	c.FrontChannelLogoutURI = strings.TrimSpace(in.GetFrontchannelLogoutUri())
 	c.FrontChannelLogoutSessionRequired = in.GetFrontchannelLogoutSessionRequired()
-	c.BackChannelLogoutURI = in.GetBackchannelLogoutUri()
+	c.BackChannelLogoutURI = strings.TrimSpace(in.GetBackchannelLogoutUri())
 	c.BackChannelLogoutSessionRequired = in.GetBackchannelLogoutSessionRequired()
+	if err := validateLogoutChannelURI("frontchannel_logout_uri", c.FrontChannelLogoutURI); err != nil {
+		return err
+	}
+	if err := validateLogoutChannelURI("backchannel_logout_uri", c.BackChannelLogoutURI); err != nil {
+		return err
+	}
 
 	c.AccessTokenTTL = secondsToDuration(in.GetAccessTokenTtlSeconds())
 	c.RefreshTokenTTL = secondsToDuration(in.GetRefreshTokenTtlSeconds())
@@ -203,6 +211,16 @@ func clientToProto(c *domain.Client) *adminv1.Client {
 		CreatedAt:                         timestamppb.New(c.CreatedAt),
 		UpdatedAt:                         timestamppb.New(c.UpdatedAt),
 	}
+}
+
+func validateLogoutChannelURI(field, raw string) error {
+	if raw == "" {
+		return nil
+	}
+	if err := netutil.ValidateOutboundURL(raw); err != nil {
+		return fmt.Errorf("%s: %w", field, err)
+	}
+	return nil
 }
 
 func parseUUID(s string) (uuid.UUID, error) {
