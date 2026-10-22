@@ -71,3 +71,18 @@ func TestUserInfoRequiresOpenIDAccessToken(t *testing.T) {
 		t.Fatalf("no openid: err=%v, want insufficient_scope", err)
 	}
 }
+
+func TestUserInfoPropagatesTokenStoreErrors(t *testing.T) {
+	t.Parallel()
+	d := newTestFlow(t, false)
+	storeErr := errors.New("redis: connection refused")
+	d.tokens.getAccessErr = storeErr
+
+	_, err := d.flow.UserInfo(t.Context(), "any-token")
+	if !errors.Is(err, storeErr) {
+		t.Fatalf("err=%v, want store error (not invalid_token)", err)
+	}
+	if errors.Is(err, oauth2.ErrInvalidToken) {
+		t.Fatal("infra failure must not be mapped to invalid_token")
+	}
+}

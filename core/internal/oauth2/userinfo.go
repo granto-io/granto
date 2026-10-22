@@ -17,14 +17,14 @@ func (f *Flow) UserInfo(ctx context.Context, accessToken string) (map[string]any
 		return nil, ErrInvalidToken
 	}
 	at, err := f.tokens.GetAccessToken(ctx, f.tenantID(), domain.HashToken(raw))
-	if at == nil || errors.Is(err, domain.ErrAccessTokenNotFound) {
+	switch {
+	case errors.Is(err, domain.ErrAccessTokenNotFound), errors.Is(err, domain.ErrAccessTokenExpired):
 		return nil, ErrInvalidToken
-	}
-	if errors.Is(err, domain.ErrAccessTokenExpired) || at.IsExpired() {
-		return nil, ErrInvalidToken
-	}
-	if err != nil {
+	case err != nil:
+		// Infrastructure (e.g. Redis) — do not mask as invalid_token.
 		return nil, err
+	case at == nil || at.IsExpired():
+		return nil, ErrInvalidToken
 	}
 	if !containsScope(at.Scopes, "openid") {
 		return nil, ErrInsufficientScope

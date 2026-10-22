@@ -453,6 +453,8 @@ type memTokens struct {
 	sessionClients map[uuid.UUID]map[string]struct{}
 	// revokeSessionErr if set is returned by RevokeRefreshTokensBySession (tests).
 	revokeSessionErr error
+	// getAccessErr if set is returned by GetAccessToken (infra failure tests).
+	getAccessErr error
 }
 
 func (m *memTokens) trackSessionClient(sessionID uuid.UUID, clientID string) {
@@ -480,6 +482,9 @@ func (m *memTokens) CreateAccessToken(_ context.Context, t *domain.AccessToken) 
 	return nil
 }
 func (m *memTokens) GetAccessToken(_ context.Context, _ uuid.UUID, hash string) (*domain.AccessToken, error) {
+	if m.getAccessErr != nil {
+		return nil, m.getAccessErr
+	}
 	t, ok := m.at[hash]
 	if !ok {
 		return nil, domain.ErrAccessTokenNotFound
