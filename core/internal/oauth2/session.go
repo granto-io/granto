@@ -40,8 +40,7 @@ func (f *Flow) DeleteLoginSession(ctx context.Context, id string) error {
 		return err
 	}
 	f.notifyBackChannelForSession(ctx, sess)
-	f.deleteOneLoginSession(ctx, sid)
-	return nil
+	return f.deleteOneLoginSession(ctx, sid)
 }
 
 // DeleteLoginSessionsBySubject removes all sessions for subject and revokes
@@ -57,7 +56,9 @@ func (f *Flow) DeleteLoginSessionsBySubject(ctx context.Context, subject string)
 	}
 	for _, s := range sessions {
 		f.notifyBackChannelForSession(ctx, s)
-		f.deleteOneLoginSession(ctx, s.ID)
+		if err := f.deleteOneLoginSession(ctx, s.ID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
