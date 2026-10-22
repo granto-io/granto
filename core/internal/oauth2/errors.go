@@ -20,6 +20,8 @@ var (
 	ErrUnauthorizedClient      = errors.New("unauthorized client")
 	ErrTokenNotFound           = errors.New("token not found")
 	ErrSessionExpired          = errors.New("session expired")
+	ErrInvalidToken            = errors.New("invalid token")
+	ErrInsufficientScope       = errors.New("insufficient scope")
 )
 
 // ClientRedirectError is an authorize error that must be returned to the client
