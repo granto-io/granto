@@ -6,7 +6,8 @@
 // Layout (single package, files by domain):
 //
 //	client.go, client_mapper.go, client_secret.go
-//	server.go, auth.go         // gRPC + gateway lifecycle / interceptors
-//	session.go, …              // later
-//	errors.go, doc.go          // shared
+//	oauth2.go, oauth2_errors.go
+//	session.go                 // LoginSession Admin CRUD / Hydra-like revoke
+//	server.go, auth.go, tenant.go
+//	errors.go, doc.go
 package admin

@@ -31,6 +31,7 @@ type Server struct {
 func NewServer(
 	clients adminv1.ClientServiceServer,
 	oauth2 adminv1.OAuth2ServiceServer,
+	sessions adminv1.LoginSessionServiceServer,
 	cfg *config.Config,
 ) *Server {
 	grpcSrv := grpc.NewServer(
@@ -38,6 +39,7 @@ func NewServer(
 	)
 	adminv1.RegisterClientServiceServer(grpcSrv, clients)
 	adminv1.RegisterOAuth2ServiceServer(grpcSrv, oauth2)
+	adminv1.RegisterLoginSessionServiceServer(grpcSrv, sessions)
 
 	hs := health.NewServer()
 	healthpb.RegisterHealthServer(grpcSrv, hs)
@@ -81,6 +83,10 @@ func (s *Server) RunGateway(ctx context.Context, httpAddr, grpcAddr string) erro
 	if err := adminv1.RegisterOAuth2ServiceHandler(ctx, mux, conn); err != nil {
 		_ = conn.Close()
 		return fmt.Errorf("register oauth2 gateway: %w", err)
+	}
+	if err := adminv1.RegisterLoginSessionServiceHandler(ctx, mux, conn); err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("register login-session gateway: %w", err)
 	}
 
 	s.httpSrv = &http.Server{

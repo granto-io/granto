@@ -31,6 +31,7 @@ Full regenerate (Wire + proto): `make generate`.
 |---------|-------|-------------|------|
 | `ClientService` | `v1/client.proto` | `/admin/v1/clients` | `internal/transport/admin/client.go` |
 | `OAuth2Service` | `v1/oauth2.proto` | `/admin/oauth2/auth/requests/...` (Hydra-like) | `internal/transport/admin/oauth2.go` → `internal/oauth2.Flow` |
+| `LoginSessionService` | `v1/session.proto` | `/admin/v1/login-sessions` (+ Hydra revoke path) | `internal/transport/admin/session.go` → `internal/oauth2.Flow` |
 
 Client CRUD: create / get / list / update / delete. Path `{id}` is the internal UUID (`clients.id`), not `client_id`.
 
@@ -48,6 +49,17 @@ OAuth2 login/consent Admin (Hydra-compatible paths):
 `accept_token` is always returned by Get*; required on Accept/Reject only when `admin.accept_strict` is true.
 
 **Accept modes (default vs strict):** see [`ACCEPT_MODES.md`](./ACCEPT_MODES.md) — required reading before shipping a login/consent app against Admin.
+
+Login sessions (SSO cookie / OIDC `sid`):
+
+| Method | Path |
+|--------|------|
+| GET | `/admin/v1/login-sessions/{id}` |
+| GET | `/admin/v1/login-sessions?subject=` (required) |
+| DELETE | `/admin/v1/login-sessions/{id}` |
+| DELETE | `/admin/oauth2/auth/sessions/login?sid=` **or** `?subject=` (Hydra-compatible; exactly one) |
+
+Delete / revoke also **revokes refresh tokens** bound to the deleted session(s). Front/back-channel logout to RPs is a separate roadmap item.
 
 Public Dynamic Client Registration (`/oauth2/register`) is **not** part of Admin API.
 
