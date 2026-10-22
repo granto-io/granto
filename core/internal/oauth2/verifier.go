@@ -14,6 +14,12 @@ import (
 // SessionCookieName is the AS-domain SSO cookie (sid).
 const SessionCookieName = "granto_sid"
 
+// DeviceCookieName is the long-lived browser device id (bound to LoginSession.device_id).
+const DeviceCookieName = "granto_did"
+
+// DeviceCookieMaxAge is MaxAge for granto_did (~1 year).
+const DeviceCookieMaxAge = 365 * 24 * 60 * 60
+
 // CompleteVerifierResult is returned after consuming login_verifier / consent_verifier.
 type CompleteVerifierResult struct {
 	SessionID  uuid.UUID

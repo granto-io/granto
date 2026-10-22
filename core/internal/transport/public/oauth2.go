@@ -42,6 +42,7 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		ACRValues:           q.Get("acr_values"),
 		UILocales:           q.Get("ui_locales"),
 		Display:             q.Get("display"),
+		DeviceID:            h.ensureDeviceCookie(w, r),
 		RequestURL:          h.authorizeRequestURL(r),
 	}
 	if c, err := r.Cookie(oauth2.SessionCookieName); err == nil {
@@ -66,6 +67,7 @@ func (h *Handler) completeVerifier(w http.ResponseWriter, r *http.Request, kind 
 		h.writeAuthorizeError(w, err)
 		return
 	}
+	_ = h.ensureDeviceCookie(w, r)
 	h.setSessionCookie(w, res)
 	http.Redirect(w, r, res.RedirectTo, http.StatusFound)
 }

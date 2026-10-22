@@ -173,11 +173,41 @@ func (m *memSessions) GetByID(_ context.Context, id uuid.UUID) (*domain.LoginSes
 	return &cp, nil
 }
 
-func (m *memSessions) ListBySubject(context.Context, uuid.UUID, string) ([]*domain.LoginSession, error) {
-	return nil, nil
+func (m *memSessions) ListBySubject(_ context.Context, _ uuid.UUID, subject string) ([]*domain.LoginSession, error) {
+	var out []*domain.LoginSession
+	for _, s := range m.byID {
+		if s.Subject == subject {
+			cp := *s
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
 }
-func (m *memSessions) Delete(context.Context, uuid.UUID) error { return nil }
-func (m *memSessions) DeleteBySubject(context.Context, uuid.UUID, string) error {
+
+func (m *memSessions) ListByDeviceID(_ context.Context, _ uuid.UUID, deviceID string) ([]*domain.LoginSession, error) {
+	var out []*domain.LoginSession
+	for _, s := range m.byID {
+		if s.DeviceID == deviceID {
+			cp := *s
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+
+func (m *memSessions) Delete(_ context.Context, id uuid.UUID) error {
+	if _, ok := m.byID[id]; !ok {
+		return domain.ErrLoginSessionNotFound
+	}
+	delete(m.byID, id)
+	return nil
+}
+func (m *memSessions) DeleteBySubject(_ context.Context, _ uuid.UUID, subject string) error {
+	for id, s := range m.byID {
+		if s.Subject == subject {
+			delete(m.byID, id)
+		}
+	}
 	return nil
 }
 
@@ -433,7 +463,12 @@ func (m *memTokens) RevokeRefreshToken(_ context.Context, _ uuid.UUID, hash stri
 	delete(m.rt, hash)
 	return nil
 }
-func (m *memTokens) RevokeRefreshTokensBySession(context.Context, uuid.UUID, uuid.UUID) error {
+func (m *memTokens) RevokeRefreshTokensBySession(_ context.Context, _ uuid.UUID, sessionID uuid.UUID) error {
+	for h, t := range m.rt {
+		if t.SessionID == sessionID {
+			delete(m.rt, h)
+		}
+	}
 	return nil
 }
 

@@ -18,6 +18,10 @@ type LoginSession struct {
 	ExpiresAt       time.Time
 	Remember        bool
 
+	// DeviceID binds the session to a browser device cookie (granto_did).
+	// Empty for legacy sessions or non-browser flows.
+	DeviceID string
+
 	ACR                       string
 	AMR                       []string
 	IdentityProviderSessionID string

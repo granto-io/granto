@@ -82,6 +82,7 @@ func (f *Flow) AcceptLogin(ctx context.Context, in AcceptLoginInput) (redirectTo
 		AuthenticatedAt:           now,
 		ExpiresAt:                 sessionExpiry(in.Remember, in.RememberFor, f.cfg.Session.DefaultTTL, f.cfg.Session.MaxTTL),
 		Remember:                  in.Remember,
+		DeviceID:                  ch.DeviceID,
 		ACR:                       in.ACR,
 		AMR:                       in.AMR,
 		IdentityProviderSessionID: in.IdentityProviderSessionID,

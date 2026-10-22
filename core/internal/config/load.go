@@ -67,8 +67,9 @@ func defaults() *Config {
 			IDTokenTTL:       1 * time.Hour,
 		},
 		Session: SessionConfig{
-			DefaultTTL: 24 * time.Hour,
-			MaxTTL:     720 * time.Hour,
+			DefaultTTL:  24 * time.Hour,
+			MaxTTL:      720 * time.Hour,
+			LogoutScope: LogoutScopeSession,
 		},
 		OIDC: OIDCConfig{
 			DynamicClientRegistration: DynamicClientRegistrationConfig{
@@ -128,6 +129,9 @@ func overrideFromEnv(cfg *Config) {
 	}
 	if v := os.Getenv("GRANTO_TOKEN_SIGNING_KID"); v != "" {
 		cfg.Token.SigningKeys.KID = v
+	}
+	if v := os.Getenv("GRANTO_SESSION_LOGOUT_SCOPE"); v != "" {
+		cfg.Session.LogoutScope = strings.TrimSpace(strings.ToLower(v))
 	}
 	if v := os.Getenv("GRANTO_LOGIN_URL"); v != "" {
 		cfg.OAuth2.LoginURL = v
@@ -200,6 +204,14 @@ func validate(cfg *Config) error {
 	}
 	if cfg.OAuth2.LoginURL == "" {
 		return fmt.Errorf("oauth2.login_url is required (set yaml or GRANTO_LOGIN_URL)")
+	}
+	if cfg.Session.LogoutScope == "" {
+		cfg.Session.LogoutScope = LogoutScopeSession
+	}
+	switch cfg.Session.LogoutScope {
+	case LogoutScopeSession, LogoutScopeDevice, LogoutScopeSubject:
+	default:
+		return fmt.Errorf("session.logout_scope: must be session, device, or subject (got %q)", cfg.Session.LogoutScope)
 	}
 	return nil
 }

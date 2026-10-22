@@ -122,11 +122,47 @@ func (h *Handler) setSessionCookie(w http.ResponseWriter, res *oauth2.CompleteVe
 		Value:    res.SessionID.String(),
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   strings.HasPrefix(h.cfg.Token.Issuer, "https://"),
+		Secure:   h.cookieSecure(),
 		SameSite: http.SameSiteLaxMode,
 	}
 	if res.Remember {
 		c.MaxAge = res.CookieMaxAgeSeconds
 	}
 	http.SetCookie(w, c)
+}
+
+func (h *Handler) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauth2.SessionCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.cookieSecure(),
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// ensureDeviceCookie returns the browser device id, setting granto_did when missing/invalid.
+func (h *Handler) ensureDeviceCookie(w http.ResponseWriter, r *http.Request) string {
+	if c, err := r.Cookie(oauth2.DeviceCookieName); err == nil {
+		if id, err := uuid.Parse(strings.TrimSpace(c.Value)); err == nil && id != uuid.Nil {
+			return id.String()
+		}
+	}
+	id := uuid.New().String()
+	http.SetCookie(w, &http.Cookie{
+		Name:     oauth2.DeviceCookieName,
+		Value:    id,
+		Path:     "/",
+		MaxAge:   oauth2.DeviceCookieMaxAge,
+		HttpOnly: true,
+		Secure:   h.cookieSecure(),
+		SameSite: http.SameSiteLaxMode,
+	})
+	return id
+}
+
+func (h *Handler) cookieSecure() bool {
+	return h.cfg != nil && strings.HasPrefix(h.cfg.Token.Issuer, "https://")
 }

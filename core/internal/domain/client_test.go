@@ -64,6 +64,17 @@ func TestHasRedirectURI(t *testing.T) {
 	}
 }
 
+func TestHasPostLogoutURI(t *testing.T) {
+	t.Parallel()
+	c := &Client{PostLogoutURIs: []string{"https://a/bye"}}
+	if !c.HasPostLogoutURI("https://a/bye") {
+		t.Fatal("HasPostLogoutURI want true")
+	}
+	if c.HasPostLogoutURI("https://evil") {
+		t.Fatal("HasPostLogoutURI want false")
+	}
+}
+
 func TestHasScope(t *testing.T) {
 	t.Parallel()
 	c := &Client{AllowedScopes: []string{"openid", "profile"}}
