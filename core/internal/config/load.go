@@ -41,9 +41,12 @@ func Load(path string) (*Config, error) {
 func defaults() *Config {
 	return &Config{
 		Server: ServerConfig{
-			PublicAddr:      ":4444",
-			AdminRESTAddr:   ":4445",
-			AdminGRPCAddr:   ":4446",
+			PublicAddr:    ":4444",
+			AdminRESTAddr: ":4445",
+			// Admin gRPC is for the in-process gateway (+ optional local tools).
+			// Bind loopback by default — ":4446" would listen on all interfaces;
+			// dialLocal only rewrites the gateway's dial target, not the listener.
+			AdminGRPCAddr:   "127.0.0.1:4446",
 			MetricsAddr:     ":4447",
 			ShutdownTimeout: 30 * time.Second,
 		},

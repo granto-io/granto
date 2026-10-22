@@ -107,6 +107,10 @@ func incomingHeaderMatcher(key string) (string, bool) {
 	}
 }
 
+// dialLocal rewrites a port-only listen addr (":4446") to a loopback dial
+// target for the in-process gateway. It does not affect what Listen binds —
+// keep admin_grpc_addr on 127.0.0.1 by default so the listener is not
+// exposed on all interfaces.
 func dialLocal(addr string) string {
 	if len(addr) > 0 && addr[0] == ':' {
 		return "127.0.0.1" + addr

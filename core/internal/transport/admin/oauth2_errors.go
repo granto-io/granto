@@ -34,7 +34,7 @@ func oauth2ErrToStatus(err error) error {
 		errors.Is(err, domain.ErrConsentChallengeAcceptTokenInvalid):
 		return status.Error(codes.PermissionDenied, err.Error())
 	default:
-		return status.Errorf(codes.Internal, "%v", err)
+		return internalStatus(err)
 	}
 }
 

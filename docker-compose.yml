@@ -36,11 +36,12 @@ services:
       - go_mod_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
     ports:
-      # Public HTTP (OAuth2 / OIDC / GNAP) — when ListenAndServe is wired.
+      # Public HTTP (OAuth2 / OIDC / GNAP).
       - "4444:4444"
-      # Admin REST / gRPC — later.
+      # Admin REST (gateway). Admin gRPC defaults to 127.0.0.1:4446 inside the
+      # container (not published); gateway dials it locally.
       - "4445:4445"
-      - "4446:4446"
+      # - "4446:4446"  # only if admin_grpc_addr binds 0.0.0.0 / :4446
     environment:
       GRANTO_POSTGRES_DSN: postgres://granto:secret@postgres:5432/granto?sslmode=disable
       GRANTO_REDIS_ADDR: redis:6379

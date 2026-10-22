@@ -209,13 +209,6 @@ func parseUUID(s string) (uuid.UUID, error) {
 	return uuid.Parse(s)
 }
 
-func tenantIDFromStr(s string) uuid.UUID {
-	if id, err := uuid.Parse(s); err == nil {
-		return id
-	}
-	return domain.DefaultTenantID
-}
-
 func durationToSeconds(d *time.Duration) int32 {
 	if d == nil {
 		return 0

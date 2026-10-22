@@ -42,7 +42,7 @@ func (h *Handler) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		ACRValues:           q.Get("acr_values"),
 		UILocales:           q.Get("ui_locales"),
 		Display:             q.Get("display"),
-		RequestURL:          requestURL(r),
+		RequestURL:          h.authorizeRequestURL(r),
 	}
 	if c, err := r.Cookie(oauth2.SessionCookieName); err == nil {
 		in.ExistingSessionID = c.Value
@@ -70,30 +70,26 @@ func (h *Handler) completeVerifier(w http.ResponseWriter, r *http.Request, kind 
 	http.Redirect(w, r, res.RedirectTo, http.StatusFound)
 }
 
-func requestURL(r *http.Request) string {
-	scheme := "https"
-	if r.TLS == nil {
-		if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
-			scheme = proto
-		} else {
-			scheme = "http"
-		}
+// authorizeRequestURL builds challenge.request_url from the configured issuer
+// plus the request path/query. Host and X-Forwarded-* are not trusted: this
+// value is shown to login/consent UIs as the AS authorize URL.
+func (h *Handler) authorizeRequestURL(r *http.Request) string {
+	issuer := ""
+	if h.cfg != nil {
+		issuer = strings.TrimRight(h.cfg.Token.Issuer, "/")
 	}
-	host := r.Host
-	if host == "" {
-		host = r.URL.Host
-	}
-	path := r.URL.RequestURI()
+	path := r.URL.EscapedPath()
 	if path == "" {
-		path = r.URL.Path
-		if r.URL.RawQuery != "" {
-			path += "?" + r.URL.RawQuery
-		}
+		path = "/"
 	}
-	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
-		return path
+	out := path
+	if issuer != "" {
+		out = issuer + path
 	}
-	return scheme + "://" + host + path
+	if r.URL.RawQuery != "" {
+		out += "?" + r.URL.RawQuery
+	}
+	return out
 }
 
 func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {

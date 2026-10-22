@@ -8,6 +8,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/granto-io/granto/core/internal/domain"
 )
 
 func TestSubtleConstantTimeEq(t *testing.T) {
@@ -39,14 +41,17 @@ func TestBearerAuthInterceptor(t *testing.T) {
 		return "ok", nil
 	}
 
-	t.Run("empty configured token allows all requests", func(t *testing.T) {
+	t.Run("empty configured token is fail-closed", func(t *testing.T) {
 		interceptor := bearerAuthInterceptor("")
-		got, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{}, okHandler)
-		if err != nil {
-			t.Fatalf("interceptor error = %v, want nil", err)
+		called := false
+		handler := func(ctx context.Context, req any) (any, error) {
+			called = true
+			return "ok", nil
 		}
-		if got != "ok" {
-			t.Fatalf("handler result = %#v, want %q", got, "ok")
+		_, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{}, handler)
+		assertStatusCode(t, err, codes.FailedPrecondition)
+		if called {
+			t.Fatal("handler must not run when admin token is unset")
 		}
 	})
 
@@ -77,12 +82,21 @@ func TestBearerAuthInterceptor(t *testing.T) {
 
 	t.Run("matching bearer token passes through", func(t *testing.T) {
 		ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer secret"))
-		got, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, okHandler)
+		var gotTenant bool
+		handler := func(ctx context.Context, req any) (any, error) {
+			id, ok := TenantIDFromContext(ctx)
+			gotTenant = ok && id == domain.DefaultTenantID
+			return "ok", nil
+		}
+		got, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
 		if err != nil {
 			t.Fatalf("interceptor error = %v, want nil", err)
 		}
 		if got != "ok" {
 			t.Fatalf("handler result = %#v, want %q", got, "ok")
+		}
+		if !gotTenant {
+			t.Fatal("expected DefaultTenantID bound after successful auth")
 		}
 	})
 }

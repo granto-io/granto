@@ -85,12 +85,13 @@ func (r *ClientRepository) GetByClientID(ctx context.Context, tenantID uuid.UUID
 	return c, err
 }
 
-func (r *ClientRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Client, error) {
+func (r *ClientRepository) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.Client, error) {
 	const q = `SELECT` + clientColumns + `
 		FROM clients
-		WHERE id = $1
+		WHERE tenant_id = $1
+		  AND id = $2
 		  AND deleted_at IS NULL`
-	c, err := scanClient(r.db.Conn(ctx).QueryRow(ctx, q, id))
+	c, err := scanClient(r.db.Conn(ctx).QueryRow(ctx, q, tenantID, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrClientNotFound
 	}
@@ -347,7 +348,8 @@ func (r *ClientRepository) Update(ctx context.Context, c *domain.Client) error {
 			registration_access_token_hash = $37,
 			is_dynamic = $38,
 			updated_at = now()
-		WHERE id = $39
+		WHERE tenant_id = $39
+		  AND id = $40
 		  AND deleted_at IS NULL`
 
 	meta, err := marshalJSONMap(c.Metadata)
@@ -400,6 +402,7 @@ func (r *ClientRepository) Update(ctx context.Context, c *domain.Client) error {
 		nullableStr(c.JWKSURI),
 		nullableStr(c.RegistrationAccessTokenHash),
 		c.IsDynamic,
+		c.TenantID,
 		c.ID,
 	)
 	if err != nil {
@@ -411,14 +414,15 @@ func (r *ClientRepository) Update(ctx context.Context, c *domain.Client) error {
 	return nil
 }
 
-func (r *ClientRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *ClientRepository) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
 	const q = `
 		UPDATE clients
 		SET deleted_at = now(),
 		    updated_at = now()
-		WHERE id = $1
+		WHERE tenant_id = $1
+		  AND id = $2
 		  AND deleted_at IS NULL`
-	tag, err := r.db.Conn(ctx).Exec(ctx, q, id)
+	tag, err := r.db.Conn(ctx).Exec(ctx, q, tenantID, id)
 	if err != nil {
 		return fmt.Errorf("delete client: %w", err)
 	}
