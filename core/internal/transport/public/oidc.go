@@ -74,6 +74,13 @@ func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if res.ClearCookie {
 		h.clearSessionCookie(w)
 	}
+	if len(res.FrontChannelLogoutURLs) > 0 {
+		if err := writeFrontChannelLogoutPage(w, res.RedirectTo, res.FrontChannelLogoutURLs); err != nil {
+			h.logger.ErrorContext(r.Context(), "front-channel logout page", "err", err)
+			writeOAuthError(w, http.StatusInternalServerError, "server_error", "internal error")
+		}
+		return
+	}
 	if res.RedirectTo != "" {
 		http.Redirect(w, r, res.RedirectTo, http.StatusFound)
 		return

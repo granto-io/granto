@@ -132,10 +132,25 @@ func TestTokenRepositoryRefreshTokenRotateAndRevokeBySession(t *testing.T) {
 		t.Fatalf("rotated JTI = %q, want %q", got.JTI, next.JTI)
 	}
 
+	ids, err := repo.ListClientIDsBySession(ctx, next.TenantID, sessionID)
+	if err != nil {
+		t.Fatalf("ListClientIDsBySession: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != "app-a" {
+		t.Fatalf("ListClientIDsBySession = %#v", ids)
+	}
+
 	if err := repo.RevokeRefreshTokensBySession(ctx, next.TenantID, sessionID); err != nil {
 		t.Fatalf("RevokeRefreshTokensBySession: %v", err)
 	}
 	if _, err := repo.GetRefreshToken(ctx, next.TenantID, next.TokenHash); !errors.Is(err, domain.ErrRefreshTokenNotFound) {
 		t.Fatalf("after session revoke: err=%v", err)
+	}
+	ids, err = repo.ListClientIDsBySession(ctx, next.TenantID, sessionID)
+	if err != nil {
+		t.Fatalf("ListClientIDsBySession after revoke: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Fatalf("session_clients should be cleared, got %#v", ids)
 	}
 }

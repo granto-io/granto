@@ -422,8 +422,24 @@ func newTestFlow(t *testing.T, strict bool) *testDeps {
 }
 
 type memTokens struct {
-	at map[string]*domain.AccessToken
-	rt map[string]*domain.RefreshToken
+	at             map[string]*domain.AccessToken
+	rt             map[string]*domain.RefreshToken
+	sessionClients map[uuid.UUID]map[string]struct{}
+}
+
+func (m *memTokens) trackSessionClient(sessionID uuid.UUID, clientID string) {
+	if sessionID == uuid.Nil || clientID == "" {
+		return
+	}
+	if m.sessionClients == nil {
+		m.sessionClients = map[uuid.UUID]map[string]struct{}{}
+	}
+	set, ok := m.sessionClients[sessionID]
+	if !ok {
+		set = map[string]struct{}{}
+		m.sessionClients[sessionID] = set
+	}
+	set[clientID] = struct{}{}
 }
 
 func (m *memTokens) CreateAccessToken(_ context.Context, t *domain.AccessToken) error {
@@ -432,6 +448,7 @@ func (m *memTokens) CreateAccessToken(_ context.Context, t *domain.AccessToken) 
 	}
 	cp := *t
 	m.at[t.TokenHash] = &cp
+	m.trackSessionClient(t.SessionID, t.ClientID)
 	return nil
 }
 func (m *memTokens) GetAccessToken(_ context.Context, _ uuid.UUID, hash string) (*domain.AccessToken, error) {
@@ -464,6 +481,7 @@ func (m *memTokens) CreateRefreshToken(_ context.Context, t *domain.RefreshToken
 	}
 	cp := *t
 	m.rt[t.TokenHash] = &cp
+	m.trackSessionClient(t.SessionID, t.ClientID)
 	return nil
 }
 func (m *memTokens) GetRefreshToken(_ context.Context, _ uuid.UUID, hash string) (*domain.RefreshToken, error) {
@@ -487,6 +505,7 @@ func (m *memTokens) RotateRefreshToken(_ context.Context, _ uuid.UUID, oldHash s
 	delete(m.rt, oldHash)
 	cp := *next
 	m.rt[next.TokenHash] = &cp
+	m.trackSessionClient(next.SessionID, next.ClientID)
 	return nil
 }
 func (m *memTokens) RevokeRefreshToken(_ context.Context, _ uuid.UUID, hash string) error {
@@ -499,7 +518,17 @@ func (m *memTokens) RevokeRefreshTokensBySession(_ context.Context, _ uuid.UUID,
 			delete(m.rt, h)
 		}
 	}
+	delete(m.sessionClients, sessionID)
 	return nil
+}
+
+func (m *memTokens) ListClientIDsBySession(_ context.Context, _ uuid.UUID, sessionID uuid.UUID) ([]string, error) {
+	set := m.sessionClients[sessionID]
+	out := make([]string, 0, len(set))
+	for id := range set {
+		out = append(out, id)
+	}
+	return out, nil
 }
 
 func sampleLoginChallenge(t *testing.T) *domain.LoginChallenge {

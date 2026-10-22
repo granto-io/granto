@@ -1,15 +1,26 @@
 package oauth2_test
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
+	"github.com/granto-io/granto/core/internal/config"
 	"github.com/granto-io/granto/core/internal/domain"
+	"github.com/granto-io/granto/core/internal/keys"
 	"github.com/granto-io/granto/core/internal/oauth2"
+	"github.com/granto-io/granto/core/internal/oidc"
 )
 
 func TestLogoutClearsSessionAndRedirects(t *testing.T) {
@@ -188,6 +199,125 @@ func TestLogoutScopeSubjectDeletesAllSubjectSessions(t *testing.T) {
 	}
 	if _, err := d.sess.GetByID(ctx, sOther.ID); err != nil {
 		t.Fatalf("other subject should remain: %v", err)
+	}
+}
+
+func TestLogoutFrontAndBackChannel(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	d := newTestFlow(t, false)
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(priv),
+	})
+	d.cfg.Token.SigningKeys = config.SigningKeysConfig{
+		PrivateKeyPEM: string(pemBytes),
+		KID:           "test-kid",
+	}
+	keyMgr, err := keys.NewManager(ctx, d.cfg, nil, nil)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	d.flow = oauth2.NewFlow(
+		d.cfg, d.clients, d.login, d.consent, d.sess, &memVerifiers{},
+		d.codes, d.tokens, d.grants, oidc.NewIDTokens(d.cfg, keyMgr),
+	)
+
+	var (
+		mu       sync.Mutex
+		gotToken string
+		gotCalls int
+		wg       sync.WaitGroup
+	)
+	wg.Add(1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer wg.Done()
+		_ = r.ParseForm()
+		mu.Lock()
+		gotCalls++
+		gotToken = r.FormValue("logout_token")
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+	d.flow.SetHTTPClient(srv.Client())
+
+	sess := &domain.LoginSession{
+		ID:              uuid.New(),
+		TenantID:        domain.DefaultTenantID,
+		Subject:         "user-1",
+		AuthenticatedAt: time.Now().UTC(),
+		ExpiresAt:       time.Now().Add(time.Hour),
+	}
+	if err := d.sess.Create(ctx, sess); err != nil {
+		t.Fatalf("Create session: %v", err)
+	}
+	d.clients.byID["app-a"].FrontChannelLogoutURI = "https://app.example/front-logout"
+	d.clients.byID["app-a"].BackChannelLogoutURI = srv.URL
+
+	if err := d.tokens.CreateAccessToken(ctx, &domain.AccessToken{
+		TokenHash: domain.HashToken("at-ch"),
+		JTI:       uuid.NewString(),
+		TenantID:  domain.DefaultTenantID,
+		ClientID:  "app-a",
+		Subject:   "user-1",
+		SessionID: sess.ID,
+		Scopes:    []string{"openid"},
+		IssuedAt:  time.Now().UTC(),
+		ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("CreateAccessToken: %v", err)
+	}
+
+	res, err := d.flow.Logout(ctx, oauth2.LogoutInput{
+		SessionIDFromCookie: sess.ID.String(),
+	})
+	if err != nil {
+		t.Fatalf("Logout: %v", err)
+	}
+	if len(res.FrontChannelLogoutURLs) != 1 {
+		t.Fatalf("FrontChannelLogoutURLs = %#v", res.FrontChannelLogoutURLs)
+	}
+	front := res.FrontChannelLogoutURLs[0]
+	if !strings.Contains(front, "https://app.example/front-logout") ||
+		!strings.Contains(front, "iss=") ||
+		!strings.Contains(front, "sid="+sess.ID.String()) {
+		t.Fatalf("front URL = %q", front)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for back-channel POST")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if gotCalls != 1 || gotToken == "" {
+		t.Fatalf("back-channel calls=%d token empty=%v", gotCalls, gotToken == "")
+	}
+	tok, err := jwt.Parse(gotToken, func(token *jwt.Token) (any, error) {
+		return &priv.PublicKey, nil
+	})
+	if err != nil || !tok.Valid {
+		t.Fatalf("parse logout_token: %v", err)
+	}
+	claims := tok.Claims.(jwt.MapClaims)
+	if claims["sub"] != "user-1" || claims["sid"] != sess.ID.String() || claims["aud"] != "app-a" {
+		t.Fatalf("logout_token claims = %#v", claims)
+	}
+	if _, err := d.sess.GetByID(ctx, sess.ID); !errors.Is(err, domain.ErrLoginSessionNotFound) {
+		t.Fatalf("session should be deleted, err=%v", err)
 	}
 }
 

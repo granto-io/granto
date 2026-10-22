@@ -58,6 +58,9 @@ func (m *uiMemTokens) RevokeRefreshToken(context.Context, uuid.UUID, string) err
 func (m *uiMemTokens) RevokeRefreshTokensBySession(context.Context, uuid.UUID, uuid.UUID) error {
 	return nil
 }
+func (m *uiMemTokens) ListClientIDsBySession(context.Context, uuid.UUID, uuid.UUID) ([]string, error) {
+	return nil, nil
+}
 
 type uiStubClients struct{}
 

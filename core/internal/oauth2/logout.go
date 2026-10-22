@@ -28,16 +28,36 @@ type LogoutInput struct {
 type LogoutResult struct {
 	ClearCookie bool
 	// RedirectTo is empty when the RP did not request (or was not allowed)
-	// a post_logout_redirect_uri — handler should respond 200.
+	// a post_logout_redirect_uri — handler should respond 200 (or after iframes).
 	RedirectTo string
+	// FrontChannelLogoutURLs are iframe src URLs for OIDC Front-Channel Logout.
+	// When non-empty, the handler serves an HTML page that loads them before redirect.
+	FrontChannelLogoutURLs []string
 }
 
-// Logout ends AS login session(s) according to session.logout_scope and
-// optionally redirects to a registered post_logout_redirect_uri.
+// Logout ends AS login session(s) according to session.logout_scope,
+// notifies RPs (front/back-channel), and optionally redirects to a registered
+// post_logout_redirect_uri.
 func (f *Flow) Logout(ctx context.Context, in LogoutInput) (*LogoutResult, error) {
-	f.endLoginSessions(ctx, in)
+	targets := f.resolveLogoutTargets(ctx, in)
 
-	out := &LogoutResult{ClearCookie: true}
+	var frontURLs []string
+	var tasks []backChannelTask
+	for _, t := range targets {
+		urls, tk := f.prepareSessionChannels(ctx, t)
+		frontURLs = append(frontURLs, urls...)
+		tasks = append(tasks, tk...)
+	}
+	f.dispatchBackChannelLogout(tasks)
+
+	for _, t := range targets {
+		f.deleteOneLoginSession(ctx, t.ID)
+	}
+
+	out := &LogoutResult{
+		ClearCookie:            true,
+		FrontChannelLogoutURLs: frontURLs,
+	}
 	redirect := strings.TrimSpace(in.PostLogoutRedirect)
 	if redirect == "" {
 		return out, nil
@@ -68,7 +88,7 @@ func (f *Flow) Logout(ctx context.Context, in LogoutInput) (*LogoutResult, error
 	return out, nil
 }
 
-func (f *Flow) endLoginSessions(ctx context.Context, in LogoutInput) {
+func (f *Flow) resolveLogoutTargets(ctx context.Context, in LogoutInput) []logoutTarget {
 	scope := f.cfg.Session.LogoutScope
 	if scope == "" {
 		scope = config.LogoutScopeSession
@@ -76,17 +96,26 @@ func (f *Flow) endLoginSessions(ctx context.Context, in LogoutInput) {
 
 	switch scope {
 	case config.LogoutScopeSubject:
-		f.endSessionsBySubject(ctx, in)
+		return f.logoutTargetsBySubject(ctx, in)
 	case config.LogoutScopeDevice:
-		f.endSessionsByDevice(ctx, in)
+		return f.logoutTargetsByDevice(ctx, in)
 	default:
-		if sid := f.resolveLogoutSessionID(ctx, in); sid != uuid.Nil {
-			f.deleteOneLoginSession(ctx, sid)
+		sid := f.resolveLogoutSessionID(ctx, in)
+		if sid == uuid.Nil {
+			return nil
 		}
+		subject := ""
+		if sess := f.loadLogoutSession(ctx, in); sess != nil {
+			subject = sess.Subject
+		}
+		if subject == "" {
+			subject = f.subjectFromIDTokenHint(in.IDTokenHint)
+		}
+		return []logoutTarget{{ID: sid, Subject: subject}}
 	}
 }
 
-func (f *Flow) endSessionsBySubject(ctx context.Context, in LogoutInput) {
+func (f *Flow) logoutTargetsBySubject(ctx context.Context, in LogoutInput) []logoutTarget {
 	subject := ""
 	if sess := f.loadLogoutSession(ctx, in); sess != nil {
 		subject = sess.Subject
@@ -96,20 +125,22 @@ func (f *Flow) endSessionsBySubject(ctx context.Context, in LogoutInput) {
 	}
 	if subject == "" {
 		if sid := f.resolveLogoutSessionID(ctx, in); sid != uuid.Nil {
-			f.deleteOneLoginSession(ctx, sid)
+			return []logoutTarget{{ID: sid, Subject: ""}}
 		}
-		return
+		return nil
 	}
 	sessions, err := f.loginSessions.ListBySubject(ctx, f.tenantID(), subject)
 	if err != nil {
-		return
+		return nil
 	}
+	out := make([]logoutTarget, 0, len(sessions))
 	for _, s := range sessions {
-		f.deleteOneLoginSession(ctx, s.ID)
+		out = append(out, logoutTarget{ID: s.ID, Subject: s.Subject})
 	}
+	return out
 }
 
-func (f *Flow) endSessionsByDevice(ctx context.Context, in LogoutInput) {
+func (f *Flow) logoutTargetsByDevice(ctx context.Context, in LogoutInput) []logoutTarget {
 	deviceID := ""
 	if sess := f.loadLogoutSession(ctx, in); sess != nil && strings.TrimSpace(sess.DeviceID) != "" {
 		deviceID = strings.TrimSpace(sess.DeviceID)
@@ -119,17 +150,23 @@ func (f *Flow) endSessionsByDevice(ctx context.Context, in LogoutInput) {
 	}
 	if deviceID == "" {
 		if sid := f.resolveLogoutSessionID(ctx, in); sid != uuid.Nil {
-			f.deleteOneLoginSession(ctx, sid)
+			subject := ""
+			if sess := f.loadLogoutSession(ctx, in); sess != nil {
+				subject = sess.Subject
+			}
+			return []logoutTarget{{ID: sid, Subject: subject}}
 		}
-		return
+		return nil
 	}
 	sessions, err := f.loginSessions.ListByDeviceID(ctx, f.tenantID(), deviceID)
 	if err != nil {
-		return
+		return nil
 	}
+	out := make([]logoutTarget, 0, len(sessions))
 	for _, s := range sessions {
-		f.deleteOneLoginSession(ctx, s.ID)
+		out = append(out, logoutTarget{ID: s.ID, Subject: s.Subject})
 	}
+	return out
 }
 
 func (f *Flow) deleteOneLoginSession(ctx context.Context, sessionID uuid.UUID) {

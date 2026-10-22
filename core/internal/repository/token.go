@@ -20,4 +20,6 @@ type TokenRepository interface {
 	RotateRefreshToken(ctx context.Context, tenantID uuid.UUID, oldHash string, next *domain.RefreshToken) error
 	RevokeRefreshToken(ctx context.Context, tenantID uuid.UUID, tokenHash string) error
 	RevokeRefreshTokensBySession(ctx context.Context, tenantID, sessionID uuid.UUID) error
+	// ListClientIDsBySession returns distinct client_ids that received tokens for this login session.
+	ListClientIDsBySession(ctx context.Context, tenantID, sessionID uuid.UUID) ([]string, error)
 }
