@@ -17,5 +17,7 @@ var AdminSet = wire.NewSet(
 	wire.Bind(new(adminv1.OAuth2ServiceServer), new(*admin.OAuth2Server)),
 	admin.NewLoginSessionServer,
 	wire.Bind(new(adminv1.LoginSessionServiceServer), new(*admin.LoginSessionServer)),
+	admin.NewConsentGrantServer,
+	wire.Bind(new(adminv1.ConsentGrantServiceServer), new(*admin.ConsentGrantServer)),
 	admin.NewServer,
 )

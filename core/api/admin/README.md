@@ -32,6 +32,7 @@ Full regenerate (Wire + proto): `make generate`.
 | `ClientService` | `v1/client.proto` | `/admin/v1/clients` | `internal/transport/admin/client.go` |
 | `OAuth2Service` | `v1/oauth2.proto` | `/admin/oauth2/auth/requests/...` (Hydra-like) | `internal/transport/admin/oauth2.go` → `internal/oauth2.Flow` |
 | `LoginSessionService` | `v1/session.proto` | `/admin/v1/login-sessions` (+ Hydra revoke path) | `internal/transport/admin/session.go` → `internal/oauth2.Flow` |
+| `ConsentGrantService` | `v1/consent_grant.proto` | `/admin/v1/consent-grants` (+ Hydra consent sessions paths) | `internal/transport/admin/consent_grant.go` → `internal/oauth2.Flow` |
 
 Client CRUD: create / get / list / update / delete. Path `{id}` is the internal UUID (`clients.id`), not `client_id`.
 
@@ -60,6 +61,17 @@ Login sessions (SSO cookie / OIDC `sid`):
 | DELETE | `/admin/oauth2/auth/sessions/login?sid=` **or** `?subject=` (Hydra-compatible; exactly one) |
 
 Delete / revoke also **revokes refresh tokens** bound to the deleted session(s). Front/back-channel logout to RPs is a separate roadmap item.
+
+Remembered consent grants (`ConsentGrant`):
+
+| Method | Path |
+|--------|------|
+| GET | `/admin/v1/consent-grants?subject=` (required; optional `client_id=`) |
+| DELETE | `/admin/v1/consent-grants?subject=` (optional `client_id=` → one client; omit → all for subject) |
+| GET | `/admin/oauth2/auth/sessions/consent?subject=` (Hydra-compatible alias) |
+| DELETE | `/admin/oauth2/auth/sessions/consent?subject=` (optional `client_id=`) |
+
+Revoke removes the grant row so the next authorize shows consent UI again. Unlike Hydra, outstanding AT/RT are **not** invalidated here yet (no revoke-by-subject index). Query param is `client_id` (Hydra used `client`).
 
 Public Dynamic Client Registration (`/oauth2/register`) is **not** part of Admin API.
 
