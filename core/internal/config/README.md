@@ -30,13 +30,15 @@ HTTP/gRPC listen addresses and process shutdown.
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `public_addr` | `:4444` | Public OAuth2 / OIDC / GNAP HTTP |
-| `admin_rest_addr` | `:4445` | Admin REST (gRPC-Gateway) |
-| `admin_grpc_addr` | `:4446` | Admin gRPC |
+| `admin_rest_addr` | `:4445` | Admin REST (gRPC-Gateway) — often reachable by login/consent apps |
+| `admin_grpc_addr` | `127.0.0.1:4446` | Admin gRPC — **loopback by default** (gateway + local tools). Port-only `:4446` listens on all interfaces; set that only if you mean to expose gRPC. Bearer auth still required either way. |
 | `metrics_addr` | `:4447` | Metrics (when enabled) |
 | `tls_cert_file` / `tls_key_file` | empty | Optional TLS files |
 | `shutdown_timeout` | `30s` | Graceful shutdown budget |
 
 Env: `GRANTO_PUBLIC_ADDR`, `GRANTO_ADMIN_REST_ADDR`, `GRANTO_ADMIN_GRPC_ADDR`, `GRANTO_METRICS_ADDR`.
+
+Note: `dialLocal` in the Admin server rewrites a port-only gRPC addr to `127.0.0.1:…` for the **gateway's outbound dial** only. It does not change what `Listen` binds — hence the loopback default on `admin_grpc_addr`.
 
 ### `postgres`
 

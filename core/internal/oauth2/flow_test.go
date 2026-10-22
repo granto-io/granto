@@ -255,7 +255,13 @@ func (m *memClients) GetByClientID(_ context.Context, _ uuid.UUID, clientID stri
 	cp := *c
 	return &cp, nil
 }
-func (m *memClients) GetByID(context.Context, uuid.UUID) (*domain.Client, error) {
+func (m *memClients) GetByID(_ context.Context, tenantID, id uuid.UUID) (*domain.Client, error) {
+	for _, c := range m.byID {
+		if c.ID == id && c.TenantID == tenantID {
+			cp := *c
+			return &cp, nil
+		}
+	}
 	return nil, domain.ErrClientNotFound
 }
 func (m *memClients) List(context.Context, uuid.UUID, repository.ClientFilter) ([]*domain.Client, error) {
@@ -263,7 +269,9 @@ func (m *memClients) List(context.Context, uuid.UUID, repository.ClientFilter) (
 }
 func (m *memClients) Create(context.Context, *domain.Client) error { return nil }
 func (m *memClients) Update(context.Context, *domain.Client) error { return nil }
-func (m *memClients) Delete(context.Context, uuid.UUID) error      { return nil }
+func (m *memClients) Delete(context.Context, uuid.UUID, uuid.UUID) error {
+	return nil
+}
 
 type memGrants struct {
 	byKey map[string]*domain.ConsentGrant

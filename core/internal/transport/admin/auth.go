@@ -8,6 +8,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/granto-io/granto/core/internal/domain"
 )
 
 func bearerAuthInterceptor(token string) grpc.UnaryServerInterceptor {
@@ -17,8 +19,10 @@ func bearerAuthInterceptor(token string) grpc.UnaryServerInterceptor {
 		_ *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (any, error) {
+		// Fail-closed: empty configured token must not open Admin (config.Load
+		// already requires admin.token; this guards future construction paths).
 		if token == "" {
-			return handler(ctx, req)
+			return nil, status.Error(codes.FailedPrecondition, "admin token not configured")
 		}
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
@@ -33,7 +37,8 @@ func bearerAuthInterceptor(token string) grpc.UnaryServerInterceptor {
 		if !strings.HasPrefix(got, prefix) || !subtleConstantTimeEq(got[len(prefix):], token) {
 			return nil, status.Error(codes.Unauthenticated, "invalid token")
 		}
-		return handler(ctx, req)
+		// MVP: single Admin bearer → DefaultTenantID. Multi-tenant Admin tokens later.
+		return handler(WithTenantID(ctx, domain.DefaultTenantID), req)
 	}
 }
 

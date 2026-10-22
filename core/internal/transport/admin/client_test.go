@@ -17,10 +17,10 @@ import (
 
 type mockClients struct {
 	createFn func(ctx context.Context, c *domain.Client) error
-	getByID  func(ctx context.Context, id uuid.UUID) (*domain.Client, error)
+	getByID  func(ctx context.Context, tenantID, id uuid.UUID) (*domain.Client, error)
 	listFn   func(ctx context.Context, tenantID uuid.UUID, filter repository.ClientFilter) ([]*domain.Client, error)
 	updateFn func(ctx context.Context, c *domain.Client) error
-	deleteFn func(ctx context.Context, id uuid.UUID) error
+	deleteFn func(ctx context.Context, tenantID, id uuid.UUID) error
 
 	lastCreate *domain.Client
 	lastFilter repository.ClientFilter
@@ -30,8 +30,9 @@ type mockClients struct {
 func (m *mockClients) GetByClientID(context.Context, uuid.UUID, string) (*domain.Client, error) {
 	return nil, errors.New("not implemented")
 }
-func (m *mockClients) GetByID(ctx context.Context, id uuid.UUID) (*domain.Client, error) {
-	return m.getByID(ctx, id)
+func (m *mockClients) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.Client, error) {
+	m.lastTenant = tenantID
+	return m.getByID(ctx, tenantID, id)
 }
 func (m *mockClients) List(ctx context.Context, tenantID uuid.UUID, filter repository.ClientFilter) ([]*domain.Client, error) {
 	m.lastTenant = tenantID
@@ -51,19 +52,24 @@ func (m *mockClients) Update(ctx context.Context, client *domain.Client) error {
 	}
 	return nil
 }
-func (m *mockClients) Delete(ctx context.Context, id uuid.UUID) error {
-	return m.deleteFn(ctx, id)
+func (m *mockClients) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	m.lastTenant = tenantID
+	return m.deleteFn(ctx, tenantID, id)
+}
+
+func adminCtx() context.Context {
+	return WithTenantID(context.Background(), domain.DefaultTenantID)
 }
 
 func TestCreateClient_RequiresName(t *testing.T) {
 	s := NewClientServer(&mockClients{})
-	_, err := s.CreateClient(context.Background(), &adminv1.CreateClientRequest{})
+	_, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{})
 	assertStatusCode(t, err, codes.InvalidArgument)
 }
 
 func TestCreateClient_InvalidType(t *testing.T) {
 	s := NewClientServer(&mockClients{})
-	_, err := s.CreateClient(context.Background(), &adminv1.CreateClientRequest{
+	_, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{
 		Name:       "n",
 		ClientType: "nope",
 	})
@@ -73,7 +79,7 @@ func TestCreateClient_InvalidType(t *testing.T) {
 func TestCreateClient_PublicNoSecret(t *testing.T) {
 	repo := &mockClients{}
 	s := NewClientServer(repo)
-	resp, err := s.CreateClient(context.Background(), &adminv1.CreateClientRequest{
+	resp, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{
 		Name:       "spa",
 		ClientType: "public",
 	})
@@ -97,7 +103,7 @@ func TestCreateClient_PublicNoSecret(t *testing.T) {
 func TestCreateClient_AutoSecret(t *testing.T) {
 	repo := &mockClients{}
 	s := NewClientServer(repo)
-	resp, err := s.CreateClient(context.Background(), &adminv1.CreateClientRequest{Name: "api"})
+	resp, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{Name: "api"})
 	if err != nil {
 		t.Fatalf("CreateClient unexpected error: %v", err)
 	}
@@ -116,6 +122,16 @@ func TestCreateClient_AutoSecret(t *testing.T) {
 	}
 }
 
+func TestCreateClient_ForeignTenantDenied(t *testing.T) {
+	s := NewClientServer(&mockClients{})
+	other := uuid.New()
+	_, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{
+		Name:     "x",
+		TenantId: other.String(),
+	})
+	assertStatusCode(t, err, codes.PermissionDenied)
+}
+
 func TestCreateClient_ProvidedSecret(t *testing.T) {
 	repo := &mockClients{}
 	s := NewClientServer(repo)
@@ -123,7 +139,7 @@ func TestCreateClient_ProvidedSecret(t *testing.T) {
 		wantID     = "fixed-id"
 		wantSecret = "provided-secret"
 	)
-	resp, err := s.CreateClient(context.Background(), &adminv1.CreateClientRequest{
+	resp, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{
 		Name:         "api",
 		ClientId:     wantID,
 		ClientSecret: wantSecret,
@@ -147,13 +163,16 @@ func TestCreateClient_RepoError(t *testing.T) {
 		return domain.ErrClientNotFound
 	}}
 	s := NewClientServer(repo)
-	_, err := s.CreateClient(context.Background(), &adminv1.CreateClientRequest{Name: "n"})
+	_, err := s.CreateClient(adminCtx(), &adminv1.CreateClientRequest{Name: "n"})
 	assertStatusCode(t, err, codes.NotFound)
 }
 
 func TestGetClient(t *testing.T) {
 	id := uuid.New()
-	repo := &mockClients{getByID: func(_ context.Context, got uuid.UUID) (*domain.Client, error) {
+	repo := &mockClients{getByID: func(_ context.Context, tenantID, got uuid.UUID) (*domain.Client, error) {
+		if tenantID != domain.DefaultTenantID {
+			t.Fatalf("GetByID tenant=%v, want DefaultTenantID", tenantID)
+		}
 		if got != id {
 			t.Fatalf("GetByID called with id=%v, want %v", got, id)
 		}
@@ -169,12 +188,12 @@ func TestGetClient(t *testing.T) {
 	s := NewClientServer(repo)
 
 	t.Run("invalid uuid is invalid argument", func(t *testing.T) {
-		_, err := s.GetClient(context.Background(), &adminv1.GetClientRequest{Id: "bad"})
+		_, err := s.GetClient(adminCtx(), &adminv1.GetClientRequest{Id: "bad"})
 		assertStatusCode(t, err, codes.InvalidArgument)
 	})
 
 	t.Run("existing client", func(t *testing.T) {
-		resp, err := s.GetClient(context.Background(), &adminv1.GetClientRequest{Id: id.String()})
+		resp, err := s.GetClient(adminCtx(), &adminv1.GetClientRequest{Id: id.String()})
 		if err != nil {
 			t.Fatalf("GetClient unexpected error: %v", err)
 		}
@@ -184,10 +203,10 @@ func TestGetClient(t *testing.T) {
 	})
 
 	t.Run("missing client is not found", func(t *testing.T) {
-		repo.getByID = func(context.Context, uuid.UUID) (*domain.Client, error) {
+		repo.getByID = func(context.Context, uuid.UUID, uuid.UUID) (*domain.Client, error) {
 			return nil, domain.ErrClientNotFound
 		}
-		_, err := s.GetClient(context.Background(), &adminv1.GetClientRequest{Id: id.String()})
+		_, err := s.GetClient(adminCtx(), &adminv1.GetClientRequest{Id: id.String()})
 		assertStatusCode(t, err, codes.NotFound)
 	})
 }
@@ -197,7 +216,7 @@ func TestListClients_DefaultLimit(t *testing.T) {
 		return nil, nil
 	}}
 	s := NewClientServer(repo)
-	_, err := s.ListClients(context.Background(), &adminv1.ListClientsRequest{
+	_, err := s.ListClients(adminCtx(), &adminv1.ListClientsRequest{
 		Search: "app",
 		Offset: 10,
 	})
@@ -218,6 +237,16 @@ func TestListClients_DefaultLimit(t *testing.T) {
 	}
 }
 
+func TestListClients_ForeignTenantDenied(t *testing.T) {
+	s := NewClientServer(&mockClients{listFn: func(context.Context, uuid.UUID, repository.ClientFilter) ([]*domain.Client, error) {
+		return nil, nil
+	}})
+	_, err := s.ListClients(adminCtx(), &adminv1.ListClientsRequest{
+		TenantId: uuid.New().String(),
+	})
+	assertStatusCode(t, err, codes.PermissionDenied)
+}
+
 func TestUpdateClient(t *testing.T) {
 	id := uuid.New()
 	existing := &domain.Client{
@@ -229,10 +258,13 @@ func TestUpdateClient(t *testing.T) {
 		UpdatedAt: time.Now().UTC(),
 	}
 	repo := &mockClients{
-		getByID: func(context.Context, uuid.UUID) (*domain.Client, error) { return existing, nil },
+		getByID: func(context.Context, uuid.UUID, uuid.UUID) (*domain.Client, error) { return existing, nil },
 		updateFn: func(_ context.Context, c *domain.Client) error {
 			if c.Name != "new" {
 				t.Fatalf("Update called with Name=%q, want %q", c.Name, "new")
+			}
+			if c.TenantID != domain.DefaultTenantID {
+				t.Fatalf("Update TenantID = %v, want DefaultTenantID", c.TenantID)
 			}
 			return nil
 		},
@@ -240,12 +272,12 @@ func TestUpdateClient(t *testing.T) {
 	s := NewClientServer(repo)
 
 	t.Run("invalid uuid is invalid argument", func(t *testing.T) {
-		_, err := s.UpdateClient(context.Background(), &adminv1.UpdateClientRequest{Id: "x"})
+		_, err := s.UpdateClient(adminCtx(), &adminv1.UpdateClientRequest{Id: "x"})
 		assertStatusCode(t, err, codes.InvalidArgument)
 	})
 
 	t.Run("updates name", func(t *testing.T) {
-		resp, err := s.UpdateClient(context.Background(), &adminv1.UpdateClientRequest{
+		resp, err := s.UpdateClient(adminCtx(), &adminv1.UpdateClientRequest{
 			Id:   id.String(),
 			Name: "new",
 		})
@@ -260,7 +292,10 @@ func TestUpdateClient(t *testing.T) {
 
 func TestDeleteClient(t *testing.T) {
 	id := uuid.New()
-	repo := &mockClients{deleteFn: func(_ context.Context, got uuid.UUID) error {
+	repo := &mockClients{deleteFn: func(_ context.Context, tenantID, got uuid.UUID) error {
+		if tenantID != domain.DefaultTenantID {
+			t.Fatalf("Delete tenant=%v, want DefaultTenantID", tenantID)
+		}
 		if got != id {
 			t.Fatalf("Delete called with id=%v, want %v", got, id)
 		}
@@ -269,20 +304,20 @@ func TestDeleteClient(t *testing.T) {
 	s := NewClientServer(repo)
 
 	t.Run("invalid uuid is invalid argument", func(t *testing.T) {
-		_, err := s.DeleteClient(context.Background(), &adminv1.DeleteClientRequest{Id: "bad"})
+		_, err := s.DeleteClient(adminCtx(), &adminv1.DeleteClientRequest{Id: "bad"})
 		assertStatusCode(t, err, codes.InvalidArgument)
 	})
 
 	t.Run("success", func(t *testing.T) {
-		_, err := s.DeleteClient(context.Background(), &adminv1.DeleteClientRequest{Id: id.String()})
+		_, err := s.DeleteClient(adminCtx(), &adminv1.DeleteClientRequest{Id: id.String()})
 		if err != nil {
 			t.Fatalf("DeleteClient unexpected error: %v", err)
 		}
 	})
 
 	t.Run("missing client is not found", func(t *testing.T) {
-		repo.deleteFn = func(context.Context, uuid.UUID) error { return domain.ErrClientNotFound }
-		_, err := s.DeleteClient(context.Background(), &adminv1.DeleteClientRequest{Id: id.String()})
+		repo.deleteFn = func(context.Context, uuid.UUID, uuid.UUID) error { return domain.ErrClientNotFound }
+		_, err := s.DeleteClient(adminCtx(), &adminv1.DeleteClientRequest{Id: id.String()})
 		assertStatusCode(t, err, codes.NotFound)
 	})
 }

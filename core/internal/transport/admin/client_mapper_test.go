@@ -1,11 +1,13 @@
 package admin
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	adminv1 "github.com/granto-io/granto/core/gen/admin/v1"
@@ -259,27 +261,35 @@ func TestClientToProtoRoundTripBasics(t *testing.T) {
 	}
 }
 
-func TestTenantIDFromStr(t *testing.T) {
+func TestResolveRequestTenant(t *testing.T) {
 	t.Parallel()
-	id := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	ctx := WithTenantID(context.Background(), domain.DefaultTenantID)
 
-	t.Run("valid uuid", func(t *testing.T) {
-		got := tenantIDFromStr(id.String())
-		if got != id {
-			t.Fatalf("tenantIDFromStr(%q) = %v, want %v", id.String(), got, id)
+	t.Run("empty uses auth tenant", func(t *testing.T) {
+		got, err := resolveRequestTenant(ctx, "")
+		if err != nil {
+			t.Fatalf("resolveRequestTenant: %v", err)
+		}
+		if got != domain.DefaultTenantID {
+			t.Fatalf("got %v, want DefaultTenantID", got)
 		}
 	})
-	t.Run("invalid falls back to default tenant", func(t *testing.T) {
-		got := tenantIDFromStr("bad")
+	t.Run("matching uuid ok", func(t *testing.T) {
+		got, err := resolveRequestTenant(ctx, domain.DefaultTenantID.String())
+		if err != nil {
+			t.Fatalf("resolveRequestTenant: %v", err)
+		}
 		if got != domain.DefaultTenantID {
-			t.Fatalf("tenantIDFromStr(%q) = %v, want DefaultTenantID %v", "bad", got, domain.DefaultTenantID)
+			t.Fatalf("got %v, want DefaultTenantID", got)
 		}
 	})
-	t.Run("empty falls back to default tenant", func(t *testing.T) {
-		got := tenantIDFromStr("")
-		if got != domain.DefaultTenantID {
-			t.Fatalf("tenantIDFromStr(%q) = %v, want DefaultTenantID %v", "", got, domain.DefaultTenantID)
-		}
+	t.Run("foreign tenant denied", func(t *testing.T) {
+		_, err := resolveRequestTenant(ctx, uuid.New().String())
+		assertStatusCode(t, err, codes.PermissionDenied)
+	})
+	t.Run("invalid uuid", func(t *testing.T) {
+		_, err := resolveRequestTenant(ctx, "bad")
+		assertStatusCode(t, err, codes.InvalidArgument)
 	})
 }
 
