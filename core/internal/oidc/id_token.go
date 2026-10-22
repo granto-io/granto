@@ -100,6 +100,45 @@ func (s *IDTokens) ParseHint(raw string) (jwt.MapClaims, error) {
 	return s.keys.ParseJWT(raw)
 }
 
+// IssueLogoutToken mints an OIDC Back-Channel Logout Token (JWT) for the RP.
+// Spec: https://openid.net/specs/openid-connect-backchannel-1_0.html
+func (s *IDTokens) IssueLogoutToken(_ context.Context, clientID, subject string, sessionID uuid.UUID) (string, error) {
+	if s == nil || s.keys == nil {
+		return "", fmt.Errorf("id token signer not configured")
+	}
+	clientID = strings.TrimSpace(clientID)
+	subject = strings.TrimSpace(subject)
+	if clientID == "" {
+		return "", fmt.Errorf("client_id is required for logout_token")
+	}
+	if subject == "" && sessionID == uuid.Nil {
+		return "", fmt.Errorf("logout_token requires sub or sid")
+	}
+
+	now := time.Now().UTC()
+	claims := jwt.MapClaims{
+		"iss": strings.TrimRight(s.cfg.Token.Issuer, "/"),
+		"aud": clientID,
+		"iat": now.Unix(),
+		"jti": uuid.NewString(),
+		"events": map[string]any{
+			"http://schemas.openid.net/event/backchannel-logout": map[string]any{},
+		},
+	}
+	if subject != "" {
+		claims["sub"] = subject
+	}
+	if sessionID != uuid.Nil {
+		claims["sid"] = sessionID.String()
+	}
+
+	signed, err := s.keys.SignJWT(claims)
+	if err != nil {
+		return "", fmt.Errorf("sign logout_token: %w", err)
+	}
+	return signed, nil
+}
+
 func mergeIDTokenExtra(claims jwt.MapClaims, extra map[string]any) {
 	if extra == nil {
 		return

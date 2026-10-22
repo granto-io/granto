@@ -2,7 +2,6 @@ package oauth2
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -29,16 +28,20 @@ func (f *Flow) ListLoginSessions(ctx context.Context, subject string) ([]*domain
 	return f.loginSessions.ListBySubject(ctx, f.tenantID(), subject)
 }
 
-// DeleteLoginSession removes one session and revokes its refresh tokens.
+// DeleteLoginSession removes one session, notifies RPs via back-channel logout,
+// and revokes its refresh tokens.
 func (f *Flow) DeleteLoginSession(ctx context.Context, id string) error {
 	sid, err := parseSessionID(id)
 	if err != nil {
 		return err
 	}
-	if _, err := f.requireLoginSession(ctx, sid); err != nil {
+	sess, err := f.requireLoginSession(ctx, sid)
+	if err != nil {
 		return err
 	}
-	return f.deleteLoginSessionStrict(ctx, sid)
+	f.notifyBackChannelForSession(ctx, sess)
+	f.deleteOneLoginSession(ctx, sid)
+	return nil
 }
 
 // DeleteLoginSessionsBySubject removes all sessions for subject and revokes
@@ -53,9 +56,8 @@ func (f *Flow) DeleteLoginSessionsBySubject(ctx context.Context, subject string)
 		return err
 	}
 	for _, s := range sessions {
-		if err := f.deleteLoginSessionStrict(ctx, s.ID); err != nil && !isSessionNotFound(err) {
-			return err
-		}
+		f.notifyBackChannelForSession(ctx, s)
+		f.deleteOneLoginSession(ctx, s.ID)
 	}
 	return nil
 }
@@ -88,24 +90,10 @@ func (f *Flow) requireLoginSession(ctx context.Context, id uuid.UUID) (*domain.L
 	return sess, nil
 }
 
-func (f *Flow) deleteLoginSessionStrict(ctx context.Context, sessionID uuid.UUID) error {
-	if err := f.loginSessions.Delete(ctx, sessionID); err != nil {
-		return err
-	}
-	if f.tokens != nil {
-		_ = f.tokens.RevokeRefreshTokensBySession(ctx, f.tenantID(), sessionID)
-	}
-	return nil
-}
-
 func parseSessionID(raw string) (uuid.UUID, error) {
 	id, err := uuid.Parse(strings.TrimSpace(raw))
 	if err != nil || id == uuid.Nil {
 		return uuid.Nil, fmt.Errorf("%w: invalid session id", ErrInvalidRequest)
 	}
 	return id, nil
-}
-
-func isSessionNotFound(err error) bool {
-	return errors.Is(err, domain.ErrLoginSessionNotFound)
 }

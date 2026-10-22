@@ -21,6 +21,7 @@ import (
 //	{tenant}:access_token_jti:{jti} → "{hash}:{expiresUnix}"
 //	{tenant}:refresh_token:{hash}
 //	{tenant}:session_refresh:{sessionID} → SET of refresh token hashes
+//	{tenant}:session_clients:{sessionID} → SET of client_ids (for front/back-channel logout)
 
 // TokenRepository is the Redis implementation of repository.TokenRepository.
 type TokenRepository struct {
@@ -46,6 +47,10 @@ func refreshTokenKey(tenantID uuid.UUID, tokenHash string) string {
 
 func sessionRefreshKey(tenantID, sessionID uuid.UUID) string {
 	return tenantID.String() + ":session_refresh:" + sessionID.String()
+}
+
+func sessionClientsKey(tenantID, sessionID uuid.UUID) string {
+	return tenantID.String() + ":session_clients:" + sessionID.String()
 }
 
 func (r *TokenRepository) CreateAccessToken(ctx context.Context, t *domain.AccessToken) error {
@@ -78,6 +83,11 @@ func (r *TokenRepository) CreateAccessToken(ctx context.Context, t *domain.Acces
 	pipe := r.rdb.Pipeline()
 	pipe.Set(ctx, accessTokenKey(t.TenantID, t.TokenHash), data, ttl)
 	pipe.Set(ctx, accessTokenJTIKey(t.TenantID, t.JTI), jtiVal, ttl)
+	if t.SessionID != uuid.Nil && t.ClientID != "" {
+		sk := sessionClientsKey(t.TenantID, t.SessionID)
+		pipe.SAdd(ctx, sk, t.ClientID)
+		pipe.Expire(ctx, sk, ttl)
+	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("store access token: %w", err)
 	}
@@ -178,6 +188,11 @@ func (r *TokenRepository) CreateRefreshToken(ctx context.Context, t *domain.Refr
 		sk := sessionRefreshKey(t.TenantID, t.SessionID)
 		pipe.SAdd(ctx, sk, t.TokenHash)
 		pipe.Expire(ctx, sk, ttl)
+		if t.ClientID != "" {
+			ck := sessionClientsKey(t.TenantID, t.SessionID)
+			pipe.SAdd(ctx, ck, t.ClientID)
+			pipe.Expire(ctx, ck, ttl)
+		}
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("store refresh token: %w", err)
@@ -247,6 +262,11 @@ func (r *TokenRepository) RotateRefreshToken(ctx context.Context, tenantID uuid.
 		sk := sessionRefreshKey(tenantID, next.SessionID)
 		pipe.SAdd(ctx, sk, next.TokenHash)
 		pipe.Expire(ctx, sk, ttl)
+		if next.ClientID != "" {
+			ck := sessionClientsKey(tenantID, next.SessionID)
+			pipe.SAdd(ctx, ck, next.ClientID)
+			pipe.Expire(ctx, ck, ttl)
+		}
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("rotate refresh token: %w", err)
@@ -283,18 +303,24 @@ func (r *TokenRepository) RevokeRefreshTokensBySession(ctx context.Context, tena
 	if err != nil {
 		return fmt.Errorf("list session refresh tokens: %w", err)
 	}
-	if len(hashes) == 0 {
-		return nil
-	}
 	pipe := r.rdb.Pipeline()
 	for _, h := range hashes {
 		pipe.Del(ctx, refreshTokenKey(tenantID, h))
 	}
 	pipe.Del(ctx, sk)
+	pipe.Del(ctx, sessionClientsKey(tenantID, sessionID))
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("revoke session refresh tokens: %w", err)
 	}
 	return nil
+}
+
+func (r *TokenRepository) ListClientIDsBySession(ctx context.Context, tenantID, sessionID uuid.UUID) ([]string, error) {
+	ids, err := r.rdb.SMembers(ctx, sessionClientsKey(tenantID, sessionID)).Result()
+	if err != nil {
+		return nil, fmt.Errorf("list session clients: %w", err)
+	}
+	return ids, nil
 }
 
 func validateAccessToken(t *domain.AccessToken) error {

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -35,6 +36,7 @@ type Flow struct {
 	tokens            repository.TokenRepository
 	consentGrants     repository.ConsentGrantRepository
 	idTokens          *oidc.IDTokens
+	httpClient        *http.Client // back-channel logout; nil → default with timeout
 }
 
 // NewFlow constructs an OAuth2 flow orchestrator.

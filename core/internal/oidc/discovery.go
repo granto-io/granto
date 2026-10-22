@@ -32,6 +32,11 @@ type DiscoveryDocument struct {
 	ClaimsParameterSupported      bool     `json:"claims_parameter_supported"`
 	RequestParameterSupported     bool     `json:"request_parameter_supported"`
 	RequestURIParameterSupported  bool     `json:"request_uri_parameter_supported"`
+
+	FrontChannelLogoutSupported        bool `json:"frontchannel_logout_supported"`
+	FrontChannelLogoutSessionSupported bool `json:"frontchannel_logout_session_supported"`
+	BackChannelLogoutSupported         bool `json:"backchannel_logout_supported"`
+	BackChannelLogoutSessionSupported  bool `json:"backchannel_logout_session_supported"`
 }
 
 // Discovery builds the OpenID Provider metadata document.
@@ -96,6 +101,11 @@ func (d *Discovery) Document() *DiscoveryDocument {
 		ClaimsParameterSupported:     false,
 		RequestParameterSupported:    false,
 		RequestURIParameterSupported: false,
+
+		FrontChannelLogoutSupported:        true,
+		FrontChannelLogoutSessionSupported: true,
+		BackChannelLogoutSupported:         true,
+		BackChannelLogoutSessionSupported:  true,
 	}
 
 	if d.cfg.OIDC.DynamicClientRegistration.Enabled {
