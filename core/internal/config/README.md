@@ -90,6 +90,7 @@ Authentication session TTL bounds (consent / login session store).
 |-----|---------|---------|
 | `default_ttl` | `24h` | Default session lifetime |
 | `max_ttl` | `720h` | Hard ceiling |
+| `logout_scope` | `session` | How far `/oauth2/logout` reaches: `session` \| `device` \| `subject`. For `device`/`subject`, GET → confirm, POST completes. Also: `Sec-Fetch-Site=cross-site` without `id_token_hint` forces confirm even for `session` (warn-logged). |
 
 ### `oauth2`
 

@@ -27,6 +27,31 @@ type LogoutInput struct {
 	State              string
 }
 
+// LogoutRequiresConfirm reports whether GET /oauth2/logout must show a browser
+// confirmation form before ending sessions. True for device|subject (CSRF would
+// cascade revoke); false for session (classic low-risk logout CSRF accepted).
+func LogoutRequiresConfirm(scope string) bool {
+	switch strings.TrimSpace(strings.ToLower(scope)) {
+	case config.LogoutScopeDevice, config.LogoutScopeSubject:
+		return true
+	default:
+		return false
+	}
+}
+
+// LogoutRequiresConfirm reports whether this Flow's configured logout_scope
+// needs a confirm step on GET (see LogoutRequiresConfirm).
+func (f *Flow) LogoutRequiresConfirm() bool {
+	if f == nil || f.cfg == nil {
+		return false
+	}
+	scope := f.cfg.Session.LogoutScope
+	if scope == "" {
+		scope = config.LogoutScopeSession
+	}
+	return LogoutRequiresConfirm(scope)
+}
+
 // LogoutResult tells the public handler how to finish the browser logout.
 type LogoutResult struct {
 	ClearCookie bool

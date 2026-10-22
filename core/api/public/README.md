@@ -45,7 +45,7 @@ OAuth/OIDC paths follow common AS practice. GNAP paths are **Granto’s concrete
 | Method | Path | Spec |
 |--------|------|------|
 | `GET` / `POST` | `/userinfo` | OIDC Core — UserInfo |
-| `GET` | `/oauth2/logout` | RP-Initiated Logout |
+| `GET` / `POST` | `/oauth2/logout` | RP-Initiated Logout. `device`/`subject`: GET → confirm, POST completes. `session`: GET completes, except `Sec-Fetch-Site=cross-site` without `id_token_hint` → confirm (+ warn log). Cross-site GET *with* `id_token_hint` still completes (RP redirect). |
 | `POST` / `GET` / `PUT` / `DELETE` | `/oauth2/register`… | OIDC Dynamic Client Registration (RFC 7591) — **only when** `oidc.dynamic_client_registration.enabled` is `true` (default: off). Open registration; management with `registration_access_token`. Admin client CRUD stays on Admin API. |
 
 ### GNAP ([RFC 9635](https://www.rfc-editor.org/rfc/rfc9635.html))

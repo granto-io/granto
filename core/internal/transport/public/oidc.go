@@ -60,6 +60,19 @@ func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
 		PostLogoutRedirect: get("post_logout_redirect_uri"),
 		State:              get("state"),
 	}
+	// GET confirm: B2 (device|subject) and/or Sec-Fetch-Site=cross-site harden.
+	if r.Method == http.MethodGet && h.logoutGETNeedsConfirm(r, in) {
+		if err := writeLogoutConfirmPage(w, logoutConfirmView{
+			IDTokenHint:        in.IDTokenHint,
+			ClientID:           in.ClientID,
+			PostLogoutRedirect: in.PostLogoutRedirect,
+			State:              in.State,
+		}); err != nil {
+			h.logger.ErrorContext(r.Context(), "logout confirm page", "err", err)
+			writeOAuthError(w, http.StatusInternalServerError, "server_error", "internal error")
+		}
+		return
+	}
 	if c, err := r.Cookie(oauth2.SessionCookieName); err == nil {
 		in.SessionIDFromCookie = c.Value
 	}

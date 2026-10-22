@@ -23,6 +23,24 @@ import (
 	"github.com/granto-io/granto/core/internal/oidc"
 )
 
+func TestLogoutRequiresConfirm(t *testing.T) {
+	t.Parallel()
+	if oauth2.LogoutRequiresConfirm(config.LogoutScopeSession) {
+		t.Fatal("session must not require confirm")
+	}
+	if !oauth2.LogoutRequiresConfirm(config.LogoutScopeDevice) {
+		t.Fatal("device must require confirm")
+	}
+	if !oauth2.LogoutRequiresConfirm(config.LogoutScopeSubject) {
+		t.Fatal("subject must require confirm")
+	}
+	d := newTestFlow(t, false)
+	d.cfg.Session.LogoutScope = config.LogoutScopeSubject
+	if !d.flow.LogoutRequiresConfirm() {
+		t.Fatal("Flow must follow configured logout_scope")
+	}
+}
+
 func TestLogoutClearsSessionAndRedirects(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
