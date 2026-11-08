@@ -11,5 +11,12 @@ if ! printf '%s\n' "$staged" | grep -qE '\.go$'; then
 	exit 0
 fi
 
-echo "pre-commit: make lint (staged .go files)"
-make -C core lint
+if printf '%s\n' "$staged" | grep -qE '^core/.*\.go$'; then
+	echo "pre-commit: make -C core lint (staged .go files)"
+	make -C core lint
+fi
+
+if printf '%s\n' "$staged" | grep -qE '^consent/.*\.go$'; then
+	echo "pre-commit: make -C consent lint (staged .go files)"
+	make -C consent lint
+fi

@@ -1,5 +1,5 @@
 # Granto monorepo — delegates to module Makefiles.
-# Extend with consent/, rbac/ targets as modules appear.
+# Extend with rbac/ targets as the module appears.
 
 .DEFAULT_GOAL := help
 
@@ -24,13 +24,31 @@ generate-proto: ## Proto only (core)
 test: ## Test core
 	$(MAKE) -C core test
 
+.PHONY: test-consent
+test-consent: ## Test consent
+	$(MAKE) -C consent test
+
+.PHONY: test-all
+test-all: test test-consent ## Test core + consent
+
 .PHONY: lint
 lint: ## Lint core (golangci-lint)
 	$(MAKE) -C core lint
 
+.PHONY: lint-consent
+lint-consent: ## Lint consent (golangci-lint)
+	$(MAKE) -C consent lint
+
+.PHONY: lint-all
+lint-all: lint lint-consent ## Lint core + consent
+
 .PHONY: lint-fix
 lint-fix: ## Format + auto-fix core lint issues
 	$(MAKE) -C core lint-fix
+
+.PHONY: lint-fix-consent
+lint-fix-consent: ## Format + auto-fix consent lint issues
+	$(MAKE) -C consent lint-fix
 
 .PHONY: install-hooks
 install-hooks: ## Enable repo git hooks (.githooks/pre-commit → lint)
@@ -41,3 +59,7 @@ install-hooks: ## Enable repo git hooks (.githooks/pre-commit → lint)
 .PHONY: build
 build: ## Build core
 	$(MAKE) -C core build
+
+.PHONY: build-consent
+build-consent: ## Build consent
+	$(MAKE) -C consent build
