@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/granto-io/granto/consent/internal/config"
+	"github.com/granto-io/granto/consent/internal/transport/public"
 )
 
 // Run loads configuration, builds the process logger, and serves the
@@ -31,8 +32,15 @@ func Run(ctx context.Context, configPath string) error {
 
 	logger := newLogger(cfg)
 
+	h := public.NewHandler(logger)
+	router := public.NewRouter(h, public.Options{Logger: logger})
+
+	// /healthz is a process-level concern, not part of the public login/
+	// consent surface — same split as core/internal/app (GET /health
+	// alongside the mounted public router).
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealth)
+	mux.Handle("/", router)
 
 	srv := &http.Server{
 		Addr:              cfg.Server.Addr,
