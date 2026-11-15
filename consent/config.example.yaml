@@ -3,12 +3,46 @@
 #
 # Load order: built-in defaults → this file → environment overrides.
 #
-# TODO: consent has no secret settings yet; document the CONSENT_* env vars
-# for secrets here once the first one lands (and whether YAML is allowed).
+# Secrets (CSRF secret, core admin token) belong in the environment or a
+# secret file, never in this file:
+#   CONSENT_CSRF_SECRET
+#   CONSENT_CORE_ADMIN_TOKEN
 
 server:
   addr: ":4455"
   shutdown_timeout: 30s
+
+csrf:
+  # Empty = random per-process key. Set CONSENT_CSRF_SECRET (at least 32
+  # random bytes) when running more than one instance.
+  secret: ""
+
+core:
+  # core Admin gRPC API. Plain text is accepted only for loopback addresses;
+  # anything else uses TLS (pin a private CA with admin_tls_ca_file).
+  admin_addr: "127.0.0.1:4446"
+  admin_tls_ca_file: ""
+
+identity:
+  # identity service gRPC API (public IdentityService contract). Only
+  # loopback addresses are supported for now.
+  addr: "127.0.0.1:4456"
+
+plugins:
+  # Registered plugin names, in display order. A single entry skips the
+  # login-method chooser.
+  enabled:
+    - email-otp
+  config:
+    email-otp:
+      # How long a 6-digit code stays valid.
+      code_ttl: 10m
+      # Wrong guesses allowed per challenge before the code is discarded.
+      max_attempts: 5
+      # Minimum delay between two codes for the same challenge.
+      resend_cooldown: 1m
+      # DEV ONLY: write codes to the log instead of sending email.
+      dev_log_codes: false
 
 log:
   level: info

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Enter the code</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f6f7f9; margin: 0; }
+    main { max-width: 26rem; margin: 10vh auto; background: #fff; padding: 2rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    h1 { font-size: 1.25rem; margin: 0 0 .75rem; }
+    p { color: #475467; line-height: 1.5; }
+    label { display: block; margin: 1rem 0 .35rem; font-weight: 600; }
+    input[type=text] { width: 100%; box-sizing: border-box; padding: .65rem .75rem; border: 1px solid #d0d5dd; border-radius: 8px; font: 1.25rem ui-monospace, monospace; letter-spacing: .35rem; text-align: center; }
+    button { margin-top: 1.25rem; width: 100%; padding: .7rem 1rem; border: 0; border-radius: 8px; background: #1570ef; color: #fff; font: inherit; cursor: pointer; }
+    button.resend { background: #fff; color: #1570ef; border: 1px solid #d0d5dd; margin-top: .5rem; }
+    .error { color: #b42318; }
+    .notice { color: #027a48; }
+    .hint { font-size: .85rem; color: #667085; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Enter the code</h1>
+  <p>If an account exists for <strong>{{.Email}}</strong>, a 6-digit code has been sent to it.</p>
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+  {{if .Notice}}<p class="notice">{{.Notice}}</p>{{end}}
+  <form method="post" action="{{.VerifyAction}}">
+    <input type="hidden" name="login_challenge" value="{{.ChallengeID}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <input type="hidden" name="email" value="{{.Email}}">
+    <label for="code">Code</label>
+    <input id="code" name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
+    <button type="submit">Verify</button>
+  </form>
+  <form method="post" action="{{.ResendAction}}">
+    <input type="hidden" name="login_challenge" value="{{.ChallengeID}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <input type="hidden" name="email" value="{{.Email}}">
+    <button class="resend" type="submit">Send a new code</button>
+  </form>
+  {{if .DevLogCodes}}<p class="hint">Development mode: the code is written to the service log.</p>{{end}}
+</main>
+</body>
+</html>

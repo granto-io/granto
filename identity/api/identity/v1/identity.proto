@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package granto.identity.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/granto-io/granto/identity/gen/identity/v1;identityv1";
+
+// IdentityService is the identity backend API (analogous to ORY Kratos).
+//
+// It stores users and credentials and exposes the primitives that consent
+// login plugins need. It does not issue sessions or tokens — that is core's
+// job. The consent service talks to it over gRPC (see D-046).
+service IdentityService {
+  // GetOrCreateUserByEmail resolves an email to a user, creating a new
+  // password-less user when missing. Used by the email-OTP login plugin.
+  rpc GetOrCreateUserByEmail(GetOrCreateUserByEmailRequest) returns (User) {
+    option (google.api.http) = {
+      post: "/identity/v1/users:get-or-create-by-email"
+      body: "*"
+    };
+  }
+
+  // GetUserByEmail returns an existing user by email.
+  rpc GetUserByEmail(GetUserByEmailRequest) returns (User) {
+    option (google.api.http) = {
+      get: "/identity/v1/users/by-email/{email}"
+    };
+  }
+
+  // CreateUser creates a user, optionally with a password.
+  rpc CreateUser(CreateUserRequest) returns (User) {
+    option (google.api.http) = {
+      post: "/identity/v1/users"
+      body: "*"
+    };
+  }
+
+  // VerifyPassword checks a password against the user's stored hash.
+  rpc VerifyPassword(VerifyPasswordRequest) returns (VerifyPasswordResponse) {
+    option (google.api.http) = {
+      post: "/identity/v1/users:verify-password"
+      body: "*"
+    };
+  }
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  bool has_password = 3;
+}
+
+message GetOrCreateUserByEmailRequest {
+  string email = 1;
+}
+
+message GetUserByEmailRequest {
+  string email = 1;
+}
+
+message CreateUserRequest {
+  string email = 1;
+  // Optional. When set, the password is stored as a bcrypt hash.
+  string password = 2;
+}
+
+message VerifyPasswordRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message VerifyPasswordResponse {
+  // verified is true when the password matches the stored hash.
+  bool verified = 1;
+  // user is populated when verified is true.
+  User user = 2;
+}

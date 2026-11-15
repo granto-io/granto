@@ -1,17 +1,18 @@
-package server
+package app
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/granto-io/granto/consent/internal/transport/public"
 )
 
-func TestNewMux_Health(t *testing.T) {
+func TestHealthMux(t *testing.T) {
 	t.Parallel()
 
-	mux := newMux(public.NewRouter(nil, public.Options{}))
+	a := &App{Public: http.NotFoundHandler()}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", a.handleHealth)
+	mux.Handle("/", a.Public)
 
 	for _, tc := range []struct {
 		method     string
@@ -20,10 +21,8 @@ func TestNewMux_Health(t *testing.T) {
 	}{
 		{http.MethodGet, "/health", http.StatusOK},
 		{http.MethodGet, "/healthz", http.StatusNotFound},
-		// Non-GET requests do not match the method-scoped health pattern and
-		// fall through to the protocol router, which does not know the path.
 		{http.MethodPost, "/health", http.StatusNotFound},
-		{http.MethodGet, "/login", http.StatusNotImplemented},
+		{http.MethodGet, "/login", http.StatusNotFound},
 	} {
 		rr := httptest.NewRecorder()
 		mux.ServeHTTP(rr, httptest.NewRequest(tc.method, tc.path, nil))

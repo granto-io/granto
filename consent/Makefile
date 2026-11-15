@@ -29,3 +29,10 @@ $(GOLANGCI_LINT):
 .PHONY: build
 build: ## Build granto-consent binary
 	go build -o bin/granto-consent ./cmd
+
+.PHONY: generate
+generate: generate-wire ## Run all code generators
+
+.PHONY: generate-wire
+generate-wire: ## Regenerate Google Wire (internal/di)
+	GOWORK=off go generate ./internal/di

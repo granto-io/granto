@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorize {{.ClientID}}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f6f7f9; margin: 0; }
+    main { max-width: 30rem; margin: 8vh auto; background: #fff; padding: 2rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
+    .client { color: #475467; margin: 0 0 1.25rem; font-family: ui-monospace, monospace; }
+    ul { padding-left: 1.25rem; }
+    li { margin: .25rem 0; }
+    label.remember { display: block; margin: 1.25rem 0; color: #475467; }
+    .actions { display: flex; gap: .75rem; }
+    button { padding: .6rem 1.1rem; border-radius: 8px; border: 1px solid #d0d5dd; background: #fff; cursor: pointer; font: inherit; }
+    button.primary { background: #1570ef; border-color: #1570ef; color: #fff; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Authorize access</h1>
+  <p class="client">{{.ClientID}}</p>
+  <p>This application requests:</p>
+  {{if .Scopes}}
+  <ul>
+    {{range .Scopes}}<li><code>{{.}}</code></li>{{end}}
+  </ul>
+  {{else}}
+  <p>No additional permissions.</p>
+  {{end}}
+  <form method="post" action="/consent">
+    <input type="hidden" name="consent_challenge" value="{{.ChallengeID}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <label class="remember"><input type="checkbox" name="remember" value="1"{{if .Remember}} checked{{end}}> Remember my decision</label>
+    <div class="actions">
+      <button class="primary" type="submit" name="decision" value="accept">Allow</button>
+      <button type="submit" name="decision" value="reject">Deny</button>
+    </div>
+  </form>
+</main>
+</body>
+</html>
