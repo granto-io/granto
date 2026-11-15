@@ -1,10 +1,13 @@
 package public
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/granto-io/granto/consent/internal/engine"
 )
 
 // Options configures the consent router.
@@ -17,20 +20,18 @@ type Options struct {
 }
 
 // NewRouter builds the chi router for the consent service's own HTTP
-// surface (login/consent pages). The process health probe is registered
-// separately by pkg/server, not here (see core/internal/app for the same
-// split between protocol router and app-level health).
-func NewRouter(h *Handler, opts Options) http.Handler {
+// surface: login and consent pages, including plugin sub-routes.
+//
+// The process health probe is registered separately by pkg/server, not here
+// (see core/internal/app for the same split between protocol router and
+// app-level health).
+func NewRouter(eng *engine.Engine, opts Options) (http.Handler, error) {
+	if eng == nil {
+		return nil, fmt.Errorf("public: engine is required")
+	}
 	logger := opts.Logger
 	if logger == nil {
-		if h != nil && h.logger != nil {
-			logger = h.logger
-		} else {
-			logger = slog.Default()
-		}
-	}
-	if h == nil {
-		h = NewHandler(logger)
+		logger = slog.Default()
 	}
 
 	r := chi.NewRouter()
@@ -44,13 +45,15 @@ func NewRouter(h *Handler, opts Options) http.Handler {
 		}
 	}
 
+	var routeErr error
 	r.Group(func(gr chi.Router) {
 		gr.Use(noCache)
-		gr.Get("/login", h.handleLoginGet)
-		gr.Post("/login", h.handleLoginPost)
-		gr.Get("/consent", h.handleConsentGet)
-		gr.Post("/consent", h.handleConsentPost)
+		gr.Use(htmlSecurityHeaders)
+		routeErr = eng.RegisterRoutes(gr)
 	})
+	if routeErr != nil {
+		return nil, routeErr
+	}
 
-	return r
+	return r, nil
 }

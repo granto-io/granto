@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in with email</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f6f7f9; margin: 0; }
+    main { max-width: 26rem; margin: 10vh auto; background: #fff; padding: 2rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    h1 { font-size: 1.25rem; margin: 0 0 .75rem; }
+    p { color: #475467; line-height: 1.5; }
+    label { display: block; margin: 1rem 0 .35rem; font-weight: 600; }
+    input[type=email] { width: 100%; box-sizing: border-box; padding: .65rem .75rem; border: 1px solid #d0d5dd; border-radius: 8px; font: inherit; }
+    button { margin-top: 1.25rem; width: 100%; padding: .7rem 1rem; border: 0; border-radius: 8px; background: #1570ef; color: #fff; font: inherit; cursor: pointer; }
+    .error { color: #b42318; }
+    .hint { font-size: .85rem; color: #667085; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Sign in with email</h1>
+  <p>We will send a 6-digit code to your email address.</p>
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+  <form method="post" action="{{.Action}}">
+    <input type="hidden" name="login_challenge" value="{{.ChallengeID}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" value="{{.Email}}" autocomplete="email" maxlength="254" required autofocus>
+    <button type="submit">Send code</button>
+  </form>
+  {{if .DevLogCodes}}<p class="hint">Development mode: the code is written to the service log.</p>{{end}}
+</main>
+</body>
+</html>

@@ -1,0 +1,18 @@
+version: v2
+
+modules:
+  - path: api
+
+deps:
+  - buf.build/googleapis/googleapis
+
+lint:
+  use:
+    - DEFAULT
+  except:
+    - FIELD_NOT_REQUIRED
+    - PACKAGE_DIRECTORY_MATCH
+
+breaking:
+  use:
+    - FILE

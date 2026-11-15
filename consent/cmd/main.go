@@ -9,6 +9,10 @@ import (
 	"syscall"
 
 	"github.com/granto-io/granto/consent/pkg/server"
+
+	// Built-in login plugins; third-party binaries blank-import their own
+	// plugin packages next to pkg/server.
+	_ "github.com/granto-io/granto/consent/internal/plugins/emailotp"
 )
 
 func main() {

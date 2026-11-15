@@ -1,4 +1,7 @@
 go 1.26.5
 
 use ./core
+
 use ./consent
+
+use ./identity

@@ -65,6 +65,18 @@ func noCache(next http.Handler) http.Handler {
 	})
 }
 
+// htmlSecurityHeaders hardens the consent HTML surface against framing and
+// cross-origin form submission. Pages use inline styles, hence the narrow
+// style-src exception.
+func htmlSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // TODO(tech-debt): statusRecorder wraps http.ResponseWriter but does not
 // forward http.Flusher (Flush), http.Hijacker, or http.ResponseController's
 // Unwrap, so any handler that needs to flush (SSE, chunked streaming) or

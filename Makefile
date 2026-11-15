@@ -20,6 +20,14 @@ generate-wire: ## Wire only (core)
 generate-proto: ## Proto only (core)
 	$(MAKE) -C core generate-proto
 
+.PHONY: generate-identity
+generate-identity: ## Run all generators in identity
+	$(MAKE) -C identity generate
+
+.PHONY: generate-consent
+generate-consent: ## Run all generators in consent
+	$(MAKE) -C consent generate
+
 .PHONY: test
 test: ## Test core
 	$(MAKE) -C core test
@@ -28,8 +36,12 @@ test: ## Test core
 test-consent: ## Test consent
 	$(MAKE) -C consent test
 
+.PHONY: test-identity
+test-identity: ## Test identity
+	$(MAKE) -C identity test
+
 .PHONY: test-all
-test-all: test test-consent ## Test core + consent
+test-all: test test-consent test-identity ## Test core + consent + identity
 
 .PHONY: lint
 lint: ## Lint core (golangci-lint)
@@ -39,8 +51,12 @@ lint: ## Lint core (golangci-lint)
 lint-consent: ## Lint consent (golangci-lint)
 	$(MAKE) -C consent lint
 
+.PHONY: lint-identity
+lint-identity: ## Lint identity (golangci-lint)
+	$(MAKE) -C identity lint
+
 .PHONY: lint-all
-lint-all: lint lint-consent ## Lint core + consent
+lint-all: lint lint-consent lint-identity ## Lint core + consent + identity
 
 .PHONY: lint-fix
 lint-fix: ## Format + auto-fix core lint issues
@@ -49,6 +65,10 @@ lint-fix: ## Format + auto-fix core lint issues
 .PHONY: lint-fix-consent
 lint-fix-consent: ## Format + auto-fix consent lint issues
 	$(MAKE) -C consent lint-fix
+
+.PHONY: lint-fix-identity
+lint-fix-identity: ## Format + auto-fix identity lint issues
+	$(MAKE) -C identity lint-fix
 
 .PHONY: install-hooks
 install-hooks: ## Enable repo git hooks (.githooks/pre-commit → lint)
@@ -63,3 +83,7 @@ build: ## Build core
 .PHONY: build-consent
 build-consent: ## Build consent
 	$(MAKE) -C consent build
+
+.PHONY: build-identity
+build-identity: ## Build identity
+	$(MAKE) -C identity build

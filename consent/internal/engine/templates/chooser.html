@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f6f7f9; margin: 0; }
+    main { max-width: 26rem; margin: 10vh auto; background: #fff; padding: 2rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    h1 { font-size: 1.25rem; margin: 0 0 1rem; }
+    a.method { display: block; padding: .75rem 1rem; margin: .5rem 0; border: 1px solid #d0d5dd; border-radius: 8px; text-decoration: none; color: #101828; }
+    a.method:hover { border-color: #667085; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Sign in</h1>
+  <p>Choose a sign-in method:</p>
+  {{range .Plugins}}
+  <a class="method" href="/login/{{.Name | urlquery}}?login_challenge={{$.ChallengeID | urlquery}}">{{.DisplayName}}</a>
+  {{end}}
+</main>
+</body>
+</html>

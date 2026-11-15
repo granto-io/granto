@@ -51,12 +51,65 @@ services:
       GRANTO_ISSUER: http://localhost:4444
       GRANTO_MASTER_KEY: "dev-only-master-key-32chars!!"
       GRANTO_ADMIN_TOKEN: change-me
-      GRANTO_LOGIN_URL: http://localhost:3000/login
+      GRANTO_LOGIN_URL: http://localhost:4455/login
+      GRANTO_CONSENT_URL: http://localhost:4455/consent
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  identity:
+    build:
+      context: ./identity
+      dockerfile: Dockerfile
+    working_dir: /app
+    volumes:
+      - ./identity:/app
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    # No ports published to the host: identity is host-internal (D-048).
+    # It binds :4456 inside the container so other compose services (consent)
+    # can reach it via the compose-internal network by hostname
+    # ("identity:4456"); that network does not leave the host, so this keeps
+    # identity's unauthenticated gRPC (VerifyPassword, CreateUser, ...) from
+    # being reachable from outside, the same way core's admin gRPC is kept
+    # off the host's published ports.
+    # ports:
+    #   - "4456:4456"  # debugging only; do not leave published
+    #   - "4457:4457"  # only if rest_addr binds 0.0.0.0 / :4457
+    environment:
+      IDENTITY_POSTGRES_DSN: postgres://granto:secret@postgres:5432/granto?sslmode=disable
+      IDENTITY_GRPC_ADDR: ":4456"
+      IDENTITY_LOG_LEVEL: debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  consent:
+    build:
+      context: ./consent
+      dockerfile: Dockerfile
+    working_dir: /app
+    volumes:
+      - ./consent:/app
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    ports:
+      - "4455:4455"
+    environment:
+      CONSENT_ADDR: ":4455"
+      CONSENT_LOG_LEVEL: debug
+      CONSENT_CSRF_SECRET: "dev-only-csrf-secret-32chars!!"
+      CONSENT_CORE_ADMIN_ADDR: core:4446
+      CONSENT_CORE_ADMIN_TOKEN: change-me
+      CONSENT_IDENTITY_ADDR: identity:4456
+      CONSENT_PLUGINS_ENABLED: email-otp
+    depends_on:
+      core:
+        condition: service_started
+      identity:
+        condition: service_started
 
 volumes:
   postgres_data:

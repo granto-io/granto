@@ -1,0 +1,21 @@
+# Example configuration for granto-identity.
+# Copy to config.yaml and adjust.
+#
+# Load order: built-in defaults → this file → environment overrides.
+#
+# Secrets (Postgres DSN) belong in the environment or a secret file, never in
+# this file:
+#   IDENTITY_POSTGRES_DSN
+
+server:
+  grpc_addr: "127.0.0.1:4456"
+  rest_addr: "127.0.0.1:4457"
+  shutdown_timeout: 30s
+
+postgres:
+  dsn: "postgres://granto:secret@localhost:5432/granto?sslmode=disable"
+  migrate_on_start: true
+
+log:
+  level: info
+  format: json

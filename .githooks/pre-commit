@@ -20,3 +20,8 @@ if printf '%s\n' "$staged" | grep -qE '^consent/.*\.go$'; then
 	echo "pre-commit: make -C consent lint (staged .go files)"
 	make -C consent lint
 fi
+
+if printf '%s\n' "$staged" | grep -qE '^identity/.*\.go$'; then
+	echo "pre-commit: make -C identity lint (staged .go files)"
+	make -C identity lint
+fi
