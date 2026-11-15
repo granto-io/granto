@@ -57,6 +57,13 @@ func noCache(next http.Handler) http.Handler {
 	})
 }
 
+// TODO(tech-debt): statusRecorder wraps http.ResponseWriter but does not
+// forward http.Flusher (Flush) or http.ResponseController's Unwrap, so any
+// handler that needs to flush (SSE, chunked streaming) through this
+// middleware would silently lose that capability. Harmless today — every
+// response here is a buffered HTML/error body — but must be fixed before
+// adding a streaming endpoint behind requestLogger. Same limitation exists
+// in core/internal/transport/public; fix both together.
 type statusRecorder struct {
 	http.ResponseWriter
 	status int

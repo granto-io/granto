@@ -26,5 +26,8 @@ func TestRouter_StubEndpoints(t *testing.T) {
 		if rr.Code != http.StatusNotImplemented {
 			t.Fatalf("%s %s: status=%d, want 501", tc.method, tc.path, rr.Code)
 		}
+		if cc := rr.Header().Get("Cache-Control"); cc != "no-store" {
+			t.Fatalf("%s %s: Cache-Control=%q, want no-store", tc.method, tc.path, cc)
+		}
 	}
 }

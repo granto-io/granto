@@ -35,11 +35,10 @@ func Run(ctx context.Context, configPath string) error {
 	h := public.NewHandler(logger)
 	router := public.NewRouter(h, public.Options{Logger: logger})
 
-	// /healthz is a process-level concern, not part of the public login/
-	// consent surface — same split as core/internal/app (GET /health
-	// alongside the mounted public router).
+	// /health is a process-level concern, not part of the public login/
+	// consent surface — same split (and same path) as core/internal/app.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", handleHealth)
+	mux.HandleFunc("GET /health", handleHealth)
 	mux.Handle("/", router)
 
 	srv := &http.Server{

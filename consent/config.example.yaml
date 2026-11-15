@@ -1,0 +1,12 @@
+# Example configuration for granto-consent.
+# Copy to config.yaml and adjust. Secrets are better set via CONSENT_* env vars.
+#
+# Load order: built-in defaults → this file → environment overrides.
+
+server:
+  addr: ":4455"
+  shutdown_timeout: 30s
+
+log:
+  level: info
+  format: json
