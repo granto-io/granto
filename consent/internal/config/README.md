@@ -32,7 +32,7 @@ Example file: [`../../config.example.yaml`](../../config.example.yaml).
 
 Env: `CONSENT_ADDR`.
 
-Note: `/health` is served separately from the `public` router (see `pkg/server.Run`), same split as `core/internal/app` — it is not part of this `addr`'s protocol surface, just the same listener.
+Note: `/health` is served by the same listener but registered outside the `public` router (see `pkg/server.Run`), same split as `core/internal/app`.
 
 ### `log`
 
@@ -45,12 +45,14 @@ Env: `CONSENT_LOG_LEVEL`, `CONSENT_LOG_FORMAT`.
 
 ---
 
-## Required at startup
+## Validation guards
 
-Validation fails unless these are set (YAML and/or env):
+`Load` rejects a config that could not start the process:
 
-- `server.addr` / `CONSENT_ADDR`
-- `server.shutdown_timeout` — must be positive (has a default, so only fails if explicitly zeroed)
+- `server.addr` must be non-empty
+- `server.shutdown_timeout` must be positive
+
+Both have defaults, so these only trigger when a YAML or env value explicitly empties or zeroes them.
 
 ---
 

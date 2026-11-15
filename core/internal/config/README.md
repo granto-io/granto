@@ -131,7 +131,7 @@ Env: `GRANTO_ADMIN_TOKEN`, `GRANTO_ADMIN_ACCEPT_STRICT`. Prefer env for `token` 
 
 ### `audit`
 
-Stream-only audit (D-039): events go to a durable Postgres **outbox**, then to configured **channels**. There is **no** Admin list/query API — storage/SIEM is the operator’s choice (pipe `stdout` / `webhook` into ELK, ClickHouse, Vector, …).
+Stream-only audit: events go to a durable Postgres **outbox**, then to configured **channels**. There is **no** Admin list/query API — storage/SIEM is the operator’s choice (pipe `stdout` / `webhook` into ELK, ClickHouse, Vector, …).
 
 | Key | Default | Purpose |
 |-----|---------|---------|

@@ -7,7 +7,7 @@ Modular authorization: OAuth 2.0, OpenID Connect, and GNAP.
 | Module | Role |
 |--------|------|
 | `core/` | Sessions, OAuth2/OIDC, GNAP (authorization server kernel) |
-| `consent/` | Login / consent (engine + auth plugins) — planned |
+| `consent/` | Login / consent (engine + auth plugins) — in development |
 | `rbac/` | Authorization policies — planned |
 
 Each module is intended to be installable (and replaceable) on its own.

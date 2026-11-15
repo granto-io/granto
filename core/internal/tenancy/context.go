@@ -10,7 +10,7 @@ import (
 
 type ctxKey struct{}
 
-// WithID attaches the authenticated Admin tenant to ctx (D-034).
+// WithID attaches the authenticated Admin tenant to ctx.
 func WithID(ctx context.Context, tenantID uuid.UUID) context.Context {
 	return context.WithValue(ctx, ctxKey{}, tenantID)
 }

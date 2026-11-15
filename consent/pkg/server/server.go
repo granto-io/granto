@@ -37,9 +37,7 @@ func Run(ctx context.Context, configPath string) error {
 
 	// /health is a process-level concern, not part of the public login/
 	// consent surface — same split (and same path) as core/internal/app.
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", handleHealth)
-	mux.Handle("/", router)
+	mux := newMux(router)
 
 	srv := &http.Server{
 		Addr:              cfg.Server.Addr,
@@ -78,6 +76,14 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
+}
+
+// newMux mounts the process health probe next to the protocol router.
+func newMux(router http.Handler) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", handleHealth)
+	mux.Handle("/", router)
+	return mux
 }
 
 func newLogger(cfg *config.Config) *slog.Logger {

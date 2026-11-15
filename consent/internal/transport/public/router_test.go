@@ -29,5 +29,8 @@ func TestRouter_StubEndpoints(t *testing.T) {
 		if cc := rr.Header().Get("Cache-Control"); cc != "no-store" {
 			t.Fatalf("%s %s: Cache-Control=%q, want no-store", tc.method, tc.path, cc)
 		}
+		if pragma := rr.Header().Get("Pragma"); pragma != "no-cache" {
+			t.Fatalf("%s %s: Pragma=%q, want no-cache", tc.method, tc.path, pragma)
+		}
 	}
 }

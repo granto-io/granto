@@ -77,7 +77,7 @@ func (f *Flow) tenantID() uuid.UUID {
 	return domain.DefaultTenantID
 }
 
-// resolveTenant returns the Admin auth tenant from ctx when present (D-034),
+// resolveTenant returns the Admin auth tenant from ctx when present,
 // otherwise the public MVP tenant. Admin LoginSession / ConsentGrant must use
 // this — not tenantID() — so they follow the same isolation as Client API.
 func (f *Flow) resolveTenant(ctx context.Context) uuid.UUID {

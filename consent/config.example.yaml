@@ -1,7 +1,10 @@
 # Example configuration for granto-consent.
-# Copy to config.yaml and adjust. Secrets are better set via CONSENT_* env vars.
+# Copy to config.yaml and adjust.
 #
 # Load order: built-in defaults → this file → environment overrides.
+#
+# TODO: consent has no secret settings yet; document the CONSENT_* env vars
+# for secrets here once the first one lands (and whether YAML is allowed).
 
 server:
   addr: ":4455"
